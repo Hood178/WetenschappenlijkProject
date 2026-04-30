@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stepper-i2c"
+version = "0.1.0"
+description = "I2C master library for the stepper motor controller"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "smbus2>=0.5.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
