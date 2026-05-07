@@ -39,6 +39,13 @@
  *      pulse_count = (PULSE_COUNT_H << 8) | PULSE_COUNT_L
  *      pulse_count == 0 -> continue mode (blijft pulsen zolang ENABLE == 1)
  *      pulse_count > 0  -> eindige beweging met precies pulse_count pulsen
+ *
+ * 0x06 (R/O): MOTION_COMPLETE_FLAG
+ *      0 -> motion actief
+ *      1 -> motion klaar / idle
+ *
+ * 0x07..0x0A (R/W): POSITION_PULSES
+ *      32-bit signed positie in pulsen (big-endian)
  */
 
 #include <Wire.h>
@@ -61,6 +68,11 @@ const uint8_t REG_PERIOD_US_H = 0x02;
 const uint8_t REG_PERIOD_US_L = 0x03;
 const uint8_t REG_PCOUNT_H    = 0x04;
 const uint8_t REG_PCOUNT_L    = 0x05;
+const uint8_t REG_MOTION_COMPLETE_FLAG = 0x06;
+const uint8_t REG_POS_HH      = 0x07;
+const uint8_t REG_POS_HL      = 0x08;
+const uint8_t REG_POS_LH      = 0x09;
+const uint8_t REG_POS_LL      = 0x0A;
 
 // ─── Huidige register state (ISR-geschreven) ──────────────────────────────
 volatile uint8_t  currentRegister = REG_ENABLE;
@@ -69,6 +81,8 @@ volatile bool     regEnable       = false;   // ENABLE
 volatile uint8_t  regDir          = 0;       // DIR (0/1)
 volatile uint16_t regPeriodUs     = 200;     // PERIOD_US (default 200 µs)
 volatile uint16_t regPulseCount   = 0;       // PULSE_COUNT (0 = continue)
+volatile bool     regMotionComplete = true;   // 1 = idle/complete, 0 = active
+volatile int32_t  regPositionPulses = 0;      // 32-bit signed pulse counter
 
 // ─── Motion state (alleen in loop() gebruikt) ─────────────────────────────
 bool     motionActive     = false;   // true = we zijn bezig met pulsen
@@ -76,6 +90,14 @@ bool     continuousMode   = false;   // true = pulseCount == 0
 uint16_t pulsesDone       = 0;       // aantal voltooide pulsen
 bool     pulseHighState   = false;   // huidige staat van PUL
 uint32_t lastToggleMicros = 0;       // tijdstip laatste toggling
+
+inline uint32_t positionAsU32() {
+  return (uint32_t)regPositionPulses;
+}
+
+inline void setPositionFromU32(uint32_t value) {
+  regPositionPulses = (int32_t)value;
+}
 
 // ─── Debug flags ───────────────────────────────────────────────────────────
 volatile bool rxEventPending = false;
@@ -105,6 +127,50 @@ void applyEnablePin(bool enable) {
 void applyDirPin(uint8_t dir) {
   regDir = dir ? 1 : 0;
   digitalWrite(PIN_DIR, regDir ? HIGH : LOW);
+}
+
+void applyPositionByte(uint8_t reg, uint8_t value) {
+  uint32_t current = positionAsU32();
+
+  switch (reg) {
+    case REG_POS_HH:
+      current &= 0x00FFFFFFUL;
+      current |= ((uint32_t)value << 24);
+      break;
+    case REG_POS_HL:
+      current &= 0xFF00FFFFUL;
+      current |= ((uint32_t)value << 16);
+      break;
+    case REG_POS_LH:
+      current &= 0xFFFF00FFUL;
+      current |= ((uint32_t)value << 8);
+      break;
+    case REG_POS_LL:
+      current &= 0xFFFFFF00UL;
+      current |= value;
+      break;
+    default:
+      return;
+  }
+
+  setPositionFromU32(current);
+}
+
+uint8_t readPositionByte(uint8_t reg) {
+  uint32_t value = positionAsU32();
+
+  switch (reg) {
+    case REG_POS_HH:
+      return (uint8_t)(value >> 24);
+    case REG_POS_HL:
+      return (uint8_t)(value >> 16);
+    case REG_POS_LH:
+      return (uint8_t)(value >> 8);
+    case REG_POS_LL:
+      return (uint8_t)(value);
+    default:
+      return 0xFF;
+  }
 }
 
 // ─── I2C callbacks ─────────────────────────────────────────────────────────
@@ -175,6 +241,17 @@ void onReceive(int numBytes) {
         break;
       }
 
+      case REG_MOTION_COMPLETE_FLAG:
+        // Read-only flag; writes are ignored.
+        break;
+
+      case REG_POS_HH:
+      case REG_POS_HL:
+      case REG_POS_LH:
+      case REG_POS_LL:
+        applyPositionByte(currentRegister, receivedValue);
+        break;
+
       default:
         // Onbekend register -> negeren
         break;
@@ -206,6 +283,15 @@ void onRequest() {
     case REG_PCOUNT_L:
       outVal = (uint8_t)(regPulseCount & 0xFF);
       break;
+    case REG_MOTION_COMPLETE_FLAG:
+      outVal = regMotionComplete ? 0x01 : 0x00;
+      break;
+    case REG_POS_HH:
+    case REG_POS_HL:
+    case REG_POS_LH:
+    case REG_POS_LL:
+      outVal = readPositionByte(currentRegister);
+      break;
     default:
       outVal = 0xFF;
       break;
@@ -222,6 +308,7 @@ void resetMotionState() {
   pulsesDone       = 0;
   pulseHighState   = false;
   lastToggleMicros = micros();
+  regMotionComplete = true;
   digitalWrite(PIN_PUL, LOW);
 }
 
@@ -303,6 +390,7 @@ void loop() {
       continuousMode = (pcountCopy == 0);
       pulseHighState = false;
       lastToggleMicros = micros();
+      regMotionComplete = false;
       digitalWrite(PIN_PUL, LOW);
     }
   }
@@ -326,6 +414,7 @@ void loop() {
         lastToggleMicros = now;
 
         // Eén volledige puls afgewerkt
+        regPositionPulses += (regDir ? 1 : -1);
         if (!continuousMode) {
           pulsesDone++;
           if (pulsesDone >= pcountCopy) {
