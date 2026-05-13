@@ -8,7 +8,7 @@
  * SDA : 18
  * SCL : 19
  * EN  : 6
- * DIR : 7
+ * DIR : 8
  * PUL : 9
  *
  * DIP switches (pins 2..5)
@@ -46,7 +46,7 @@
 
 // ─── Pin definitions ───────────────────────────────────────────────────────
 const uint8_t PIN_EN  = 6;
-const uint8_t PIN_DIR = 7;
+const uint8_t PIN_DIR = 8;
 const uint8_t PIN_PUL = 9;
 
 // DIP switches
