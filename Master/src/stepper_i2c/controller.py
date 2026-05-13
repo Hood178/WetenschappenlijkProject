@@ -129,7 +129,7 @@ class StepperController:
         Args:
             period_us: Desired step period in microseconds.
         """
-        clipped = max(20, min(65535, int(period_us)))
+        clipped = max(const.MIN_PERIOD_US, min(const.MAX_PERIOD_US, int(period_us)))
         self._write_16(const.REG_PERIOD_US_H, clipped)
 
     def _set_step_count(self, count: int) -> None:
