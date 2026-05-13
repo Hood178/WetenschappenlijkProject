@@ -90,43 +90,7 @@ class StepperController:
         """
         high = self._bus.read_byte_data(self._address, reg_high)
         low = self._bus.read_byte_data(self._address, reg_high + 1)
-        return (high << 8) | low
-    
-    def _read_32(self, reg_high: int) -> int:
-        """Read a 32-bit value from four consecutive registers.
-
-        Args:
-            reg_high: Register address of the first byte.
-
-        Returns:
-            The 32-bit value read from the registers.
-        """
-        b0 = self._bus.read_byte_data(self._address, reg_high)
-        b1 = self._bus.read_byte_data(self._address, reg_high + 1)
-        b2 = self._bus.read_byte_data(self._address, reg_high + 2)
-        b3 = self._bus.read_byte_data(self._address, reg_high + 3)
-        return (b0 << 24) | (b1 << 16) | (b2 << 8) | b3
-
-    def _write_32(self, reg_high: int, value: int) -> None:
-        """Write a 32-bit value to four consecutive registers.
-
-        The value is written big-endian: most significant byte first.
-
-        Args:
-            reg_high: Register address of the first byte.
-            value: 32-bit value to write.
-        """
-        value = int(value) & 0xFFFFFFFF
-        b0 = (value >> 24) & 0xFF
-        b1 = (value >> 16) & 0xFF
-        b2 = (value >> 8) & 0xFF
-        b3 = value & 0xFF
-        
-        self._bus.write_byte_data(self._address, reg_high, b0)
-        self._bus.write_byte_data(self._address, reg_high + 1, b1)
-        self._bus.write_byte_data(self._address, reg_high + 2, b2)
-        self._bus.write_byte_data(self._address, reg_high + 3, b3)
-    
+        return (high << 8) | low 
     
     
     """-------- low-level control methods -------"""
@@ -204,16 +168,6 @@ class StepperController:
         # Map 0% to MIN_PERIOD_US (max speed) and 100% to MAX_PERIOD_US (min speed)
         return int(const.MAX_PERIOD_US - (const.MAX_PERIOD_US - const.MIN_PERIOD_US) * (percent / 100.0))
     
-    def _get_position_pulses(self) -> int:
-        """Read the current position counter from the slave.
-
-        Returns:
-            Current position in pulses.
-        """
-        return self._read_32(const.REG_POS_HH)
-
-
-
     """-------- high-level control methods -------"""
     def set_speed_percent(self, speed_percent: float) -> None:
         """Set the speed as a percentage of maximum speed.
@@ -412,7 +366,7 @@ class StepperController:
         """
         start = time.time()
         while time.time() - start < timeout_sec:
-            if self.is_motion_complete():
+            if not self.is_moving():
                 return True
             time.sleep(0.01)
         raise TimeoutError("Motion did not complete within timeout")
@@ -426,86 +380,5 @@ class StepperController:
         state = self.get_state()
         return state["speed_percent"]
     
-    def get_angle(self) -> float:
-        """Get the current angle in degrees.
 
-        Returns:
-            The current position converted from pulses to degrees, normalized
-            to the range 0-360.
-        """
-        position_pulses = self._get_position_pulses()
-        angle = (position_pulses / self._steps_per_rev) * 360.0
-        return angle % 360.0
-    
-    def reset_position(self, position_pulses: int = 0) -> None:
-        """Reset the current position counter on the slave.
-
-        Args:
-            position_pulses: Pulse count to write to the slave position register.
-
-        Raises:
-            ValueError: If position_pulses is not an integer.
-        """
-        if not isinstance(position_pulses, int):
-            raise ValueError("position_pulses must be an integer")
-        self._write_32(const.REG_POS_HH, position_pulses)
-    
-    def reset_angle(self, angle_degrees: float = 0.0) -> None:
-        """Reset the current position to a specific angle in degrees.
-
-        Args:
-            angle_degrees: New logical zero point in degrees.
-
-        Raises:
-            ValueError: If angle_degrees is not numeric.
-        """
-        if not isinstance(angle_degrees, (int, float)):
-            raise ValueError("angle_degrees must be a number")
-        angle_degrees = angle_degrees % 360.0
-        position_pulses = int((angle_degrees / 360.0) * self._steps_per_rev)
-        self.reset_position(position_pulses)
-    
-    def move_to_angle(self, target_angle: float, speed_percent: float = 50.0, clockwise: bool | None = None) -> None:
-        """Move to a target angle.
-
-        Args:
-            target_angle: Target angle in degrees.
-            speed_percent: Speed as a percentage from 0 to 100.
-            clockwise: True for clockwise, False for counter-clockwise, or
-                None for the shortest path.
-
-        Raises:
-            ValueError: If any argument is invalid.
-
-        Example:
-            controller.move_to_angle(180, speed_percent=50, clockwise=True)
-        """
-        if not isinstance(target_angle, (int, float)):
-            raise ValueError("target_angle must be a number")
-        if not isinstance(speed_percent, (int, float)):
-            raise ValueError("speed_percent must be a number")
-        if not (0 <= speed_percent <= 100):
-            raise ValueError("speed_percent must be between 0 and 100")
-        if clockwise is not None and not isinstance(clockwise, bool):
-            raise ValueError("clockwise must be a boolean or None")
-        
-        current_angle = self.get_angle()
-        target_angle = target_angle % 360.0
-        
-        # Calculate both paths
-        delta_cw = (target_angle - current_angle) % 360.0
-        delta_ccw = 360.0 - delta_cw if delta_cw > 0 else 0.0
-        
-        # Choose path based on direction parameter
-        if clockwise is None:
-            # Shortest path
-            if delta_cw <= delta_ccw:
-                self.move_degrees(delta_cw, speed_percent=speed_percent, clockwise=True)
-            else:
-                self.move_degrees(delta_ccw, speed_percent=speed_percent, clockwise=False)
-        elif clockwise:
-            self.move_degrees(delta_cw, speed_percent=speed_percent, clockwise=True)
-        else:  # counter-clockwise
-            self.move_degrees(delta_ccw, speed_percent=speed_percent, clockwise=False)
-    
     
