@@ -11,7 +11,7 @@ class StepperController:
     low-level register access methods internal.
     """
     
-    def __init__(self, address: int, bus: int = const.I2C_BUS, steps_per_rev: int = const.STEPS_PER_REV):
+    def __init__(self, address: int | str, bus: int = const.I2C_BUS, steps_per_rev: int = const.STEPS_PER_REV):
         """Create a controller for one stepper slave.
 
         Args:
@@ -19,6 +19,9 @@ class StepperController:
             bus: I2C bus number to open.
             steps_per_rev: Number of motor steps per full revolution.
         """
+        if isinstance(address, str):
+            address = int(address, 2)
+        
         self._address = const.BASE_I2C_ADDRESS | (address & 0x0F)
         self._bus = SMBus(bus)
         self._steps_per_rev = steps_per_rev
@@ -228,6 +231,14 @@ class StepperController:
     def stop(self) -> None:
         """Stop the motor by disabling the driver output."""
         self.enable(False)
+
+    def lock(self) -> None:
+        """Hold the motor in place by keeping the driver enabled with no pulses."""
+        self._write_8(const.REG_LOCK, 0x01)
+
+    def hold(self) -> None:
+        """Alias for lock()."""
+        self.lock()
     
     def move_steps(self, steps: int, speed_percent: float = 50.0, clockwise: bool = True) -> None:
         """Execute a finite move by a number of steps.
