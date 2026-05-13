@@ -246,10 +246,10 @@ class StepperController:
             raise ValueError("speed_percent must be a number")
         if not (0 <= speed_percent <= 100):
             raise ValueError("speed_percent must be between 0 and 100")
-        self.enable(True)
         self.set_direction(clockwise)
         self._set_period_us(self._speed_percent_to_period_us(speed_percent))
         self._set_step_count(steps)
+        self.enable(True)
 
     def move_degrees(self, degrees: float, speed_percent: float = 50.0, clockwise: bool = True) -> None:
         """Execute a move by degrees.
@@ -285,10 +285,10 @@ class StepperController:
             raise ValueError("speed_percent must be a number")
         if not (0 <= speed_percent <= 100):
             raise ValueError("speed_percent must be between 0 and 100")
-        self.enable(True)
         self.set_direction(clockwise)
         self._set_period_us(self._speed_percent_to_period_us(speed_percent))
         self._set_step_count(0)  # 0 = continuous
+        self.enable(True)
 
     def get_state(self) -> dict:
         """Read back the current slave state.

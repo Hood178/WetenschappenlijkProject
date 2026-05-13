@@ -359,6 +359,11 @@ void loop() {
     }
   }
 
+  // Update motioncomplete flag: false als pulsen worden verstuurd EN motor is enabled
+  noInterrupts();
+  regMotionComplete = !(motionActive && enCopy);
+  interrupts();
+
   // Debug RX
   if (rxEventPending) {
     int     numBytesCopy;
