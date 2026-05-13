@@ -165,7 +165,7 @@ class StepperController:
             raise ValueError("percent must be a number")
         if not (0 <= percent <= 100):
             raise ValueError("percent must be between 0 and 100")
-        # Map 0% to MIN_PERIOD_US (max speed) and 100% to MAX_PERIOD_US (min speed)
+        # Map 0% to MAX_PERIOD_US (min speed) and 100% to MIN_PERIOD_US (max speed)
         return int(const.MAX_PERIOD_US - (const.MAX_PERIOD_US - const.MIN_PERIOD_US) * (percent / 100.0))
     
     """-------- high-level control methods -------"""
@@ -303,7 +303,7 @@ class StepperController:
         pcount = self._read_16(const.REG_PCOUNT_H)
 
         # Calculate speed percent inverse of _speed_percent_to_period_us()
-        # Mapping: 0% -> MIN_PERIOD_US (fastest), 100% -> MAX_PERIOD_US (slowest)
+        # Mapping: 0% -> MAX_PERIOD_US (slowest), 100% -> MIN_PERIOD_US (fastest)
         if const.MAX_PERIOD_US == const.MIN_PERIOD_US:
             speed_percent = 0.0
         else:

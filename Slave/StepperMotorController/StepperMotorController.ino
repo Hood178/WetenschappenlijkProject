@@ -75,6 +75,7 @@ volatile bool     motionStartPending   = false;
 
 // trigger om nieuwe motion te starten vanuit loop()
 volatile bool startMotionRequest = false;
+volatile bool stopMotionRequest  = false;
 
 // ─── Motion state (alleen loop) ────────────────────────────────────────────
 bool     motionActive       = false;
@@ -175,18 +176,21 @@ void onReceive(int numBytes) {
   switch (currentRegister) {
     case REG_ENABLE:
       if (receivedValue != 0) {
-        applyEnablePin(true);
+        regEnable = true;
         motionStartPending = true;
         regMotionComplete = false;
+        stopMotionRequest = false;
         startMotionRequest = true;   // start nieuwe motion in loop()
       } else {
-        applyEnablePin(false);
-        stopMotionInternal(true);
+        regEnable = false;
+        motionStartPending = false;
+        stopMotionRequest = true;
+        regMotionComplete = true;
       }
       break;
 
     case REG_DIR:
-      applyDirPin(receivedValue & 0x01);
+      regDir = (receivedValue & 0x01);
       break;
 
     case REG_PERIOD_US_H: {
@@ -306,6 +310,7 @@ void loop() {
   uint16_t periodCopy;
   uint16_t pcountCopy;
   bool     startReqCopy;
+  bool     stopReqCopy;
 
   noInterrupts();
   enCopy       = regEnable;
@@ -313,8 +318,12 @@ void loop() {
   periodCopy   = regPeriodUs;
   pcountCopy   = regPulseCount;
   startReqCopy = startMotionRequest;
+  stopReqCopy  = stopMotionRequest;
   if (startMotionRequest) {
     startMotionRequest = false;
+  }
+  if (stopMotionRequest) {
+    stopMotionRequest = false;
   }
   interrupts();
 
@@ -329,8 +338,12 @@ void loop() {
     halfPeriod = 10;
   }
 
+  if (stopReqCopy) {
+    stopMotionInternal(true);
+  }
+
   // Start enkel op expliciete enable=1 write
-  if (startReqCopy && enCopy) {
+  if (!stopReqCopy && startReqCopy && enCopy) {
     beginMotionInternal(pcountCopy);
   }
 

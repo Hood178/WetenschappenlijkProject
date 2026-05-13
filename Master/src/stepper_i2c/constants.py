@@ -4,7 +4,7 @@ I2C_BUS = 1
 
 """Stepper motor parameters"""
 STEPS_PER_REV = 200
-MIN_PERIOD_US = 20
+MIN_PERIOD_US = 1000
 MAX_PERIOD_US = 65535
 
 """Register addresses (all 1 byte except where noted)."""
