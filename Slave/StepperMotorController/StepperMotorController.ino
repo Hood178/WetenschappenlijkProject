@@ -43,6 +43,7 @@
  */
 
 #include <Wire.h>
+#include <Serial.h>
 
 // ─── Pin definitions ───────────────────────────────────────────────────────
 const uint8_t PIN_EN  = 7;
@@ -50,10 +51,10 @@ const uint8_t PIN_DIR = 8;
 const uint8_t PIN_PUL = 9;
 
 // DIP switches
-const uint8_t DIP_PIN_0 = 2;
-const uint8_t DIP_PIN_1 = 3;
-const uint8_t DIP_PIN_2 = 4;
-const uint8_t DIP_PIN_3 = 5;
+const uint8_t DIP_PIN_0 = 5;
+const uint8_t DIP_PIN_1 = 4;
+const uint8_t DIP_PIN_2 = 3;
+const uint8_t DIP_PIN_3 = 2;
 
 // ─── Register map ──────────────────────────────────────────────────────────
 const uint8_t REG_ENABLE                = 0x00;
@@ -61,7 +62,7 @@ const uint8_t REG_DIR                   = 0x01;
 const uint8_t REG_PERIOD_US_H           = 0x02;
 const uint8_t REG_PERIOD_US_L           = 0x03;
 const uint8_t REG_PCOUNT_H              = 0x04;
-const uint8_t REG_PCOUNT_L              = 0x05;
+const uint8_t REG_PCOUNT_L             = 0x05;
 const uint8_t REG_MOTION_COMPLETE_FLAG  = 0x06;
 const uint8_t REG_LOCK                  = 0x07;
 
@@ -74,7 +75,6 @@ volatile uint16_t regPulseCount        = 0;
 volatile bool     regMotionComplete    = true;
 volatile bool     motionStartPending   = false;
 
-// trigger om nieuwe motion te starten vanuit loop()
 volatile bool startMotionRequest = false;
 volatile bool stopMotionRequest  = false;
 
@@ -86,23 +86,12 @@ uint16_t pulsesDone         = 0;
 bool     pulseHighState     = false;
 uint32_t lastToggleMicros   = 0;
 
-// ─── Debug flags ───────────────────────────────────────────────────────────
-const bool ENABLE_DEBUG_LOGS = false;
-volatile bool rxEventPending = false;
-volatile bool txEventPending = false;
-
-volatile int     lastNumBytes         = 0;
-volatile uint8_t lastReceivedRegister = 0xFF;
-volatile uint8_t lastReceivedValue    = 0xFF;
-volatile bool    lastReceivedHasValue = false;
-volatile bool    rxOverflow           = false;
-
 // ─── Helpers ───────────────────────────────────────────────────────────────
 uint8_t readDipAddressLowNibble() {
-  const uint8_t b0 = (digitalRead(DIP_PIN_0) == HIGH) ? 1 : 0;
-  const uint8_t b1 = (digitalRead(DIP_PIN_1) == HIGH) ? 1 : 0;
-  const uint8_t b2 = (digitalRead(DIP_PIN_2) == HIGH) ? 1 : 0;
-  const uint8_t b3 = (digitalRead(DIP_PIN_3) == HIGH) ? 1 : 0;
+  const uint8_t b0 = (digitalRead(DIP_PIN_0) == HIGH) ? 0 : 1;
+  const uint8_t b1 = (digitalRead(DIP_PIN_1) == HIGH) ? 0 : 1;
+  const uint8_t b2 = (digitalRead(DIP_PIN_2) == HIGH) ? 0 : 1;
+  const uint8_t b3 = (digitalRead(DIP_PIN_3) == HIGH) ? 0 : 1;
   return (uint8_t)(b0 | (b1 << 1) | (b2 << 2) | (b3 << 3));
 }
 
@@ -117,13 +106,13 @@ void applyDirPin(uint8_t dir) {
 }
 
 void stopMotionInternal(bool setCompleteFlag) {
-  motionActive     = false;
-  continuousMode   = false;
-  pulsesTarget     = 0;
-  pulsesDone       = 0;
-  pulseHighState   = false;
+  motionActive       = false;
+  continuousMode     = false;
+  pulsesTarget       = 0;
+  pulsesDone         = 0;
+  pulseHighState     = false;
   motionStartPending = false;
-  lastToggleMicros = micros();
+  lastToggleMicros   = micros();
   digitalWrite(PIN_PUL, LOW);
 
   if (setCompleteFlag) {
@@ -132,14 +121,14 @@ void stopMotionInternal(bool setCompleteFlag) {
 }
 
 void beginMotionInternal(uint16_t pulseCount) {
-  motionActive      = true;
+  motionActive       = true;
   motionStartPending = false;
-  continuousMode    = (pulseCount == 0);
-  pulsesTarget      = pulseCount;
-  pulsesDone        = 0;
-  pulseHighState    = false;
-  lastToggleMicros  = micros();
-  regMotionComplete = false;
+  continuousMode     = (pulseCount == 0);
+  pulsesTarget       = pulseCount;
+  pulsesDone         = 0;
+  pulseHighState     = false;
+  lastToggleMicros   = micros();
+  regMotionComplete  = false;
   digitalWrite(PIN_PUL, LOW);
 }
 
@@ -147,46 +136,37 @@ void beginMotionInternal(uint16_t pulseCount) {
 void onReceive(int numBytes) {
   if (numBytes < 1) return;
 
-  lastNumBytes = numBytes;
-  rxOverflow = false;
-  lastReceivedHasValue = false;
-  lastReceivedValue = 0xFF;
-
   currentRegister = Wire.read();
-  lastReceivedRegister = currentRegister;
   numBytes--;
 
   if (numBytes == 0) {
     // Alleen register pointer zetten voor volgende read
-    rxEventPending = true;
     return;
   }
 
   uint8_t receivedValue = 0xFF;
   if (Wire.available()) {
     receivedValue = Wire.read();
-    lastReceivedValue = receivedValue;
-    lastReceivedHasValue = true;
   }
 
+  // Drain eventuele extra bytes
   while (Wire.available()) {
     Wire.read();
-    rxOverflow = true;
   }
 
   switch (currentRegister) {
     case REG_ENABLE:
       if (receivedValue != 0) {
-        regEnable = true;
+        regEnable          = true;
         motionStartPending = true;
-        regMotionComplete = false;
-        stopMotionRequest = false;
-        startMotionRequest = true;   // start nieuwe motion in loop()
+        regMotionComplete  = false;
+        stopMotionRequest  = false;
+        startMotionRequest = true;
       } else {
-        regEnable = false;
+        regEnable          = false;
         motionStartPending = false;
-        stopMotionRequest = true;
-        regMotionComplete = true;
+        stopMotionRequest  = true;
+        regMotionComplete  = true;
       }
       break;
 
@@ -227,23 +207,21 @@ void onReceive(int numBytes) {
     }
 
     case REG_MOTION_COMPLETE_FLAG:
-      // read-only
+      // read-only, schrijf wordt genegeerd
       break;
 
     case REG_LOCK:
       if (receivedValue != 0) {
-        regEnable = true;
+        regEnable          = true;
         motionStartPending = false;
-        stopMotionRequest = true;
-        regMotionComplete = true;
+        stopMotionRequest  = true;
+        regMotionComplete  = true;
       }
       break;
 
     default:
       break;
   }
-
-  rxEventPending = true;
 }
 
 void onRequest() {
@@ -277,7 +255,6 @@ void onRequest() {
   }
 
   Wire.write(outVal);
-  txEventPending = true;
 }
 
 // ─── setup() ───────────────────────────────────────────────────────────────
@@ -298,12 +275,9 @@ void setup() {
 
   const uint8_t lowNibble = readDipAddressLowNibble();
   uint8_t slaveAddress = (lowNibble & 0x0F);
-  if (slaveAddress == 0) slaveAddress = 1;
 
   Serial.begin(115200);
-  while (!Serial) { ; }
-
-  Serial.println(F("DM320T stepper slave ready"));
+  delay(2000);
   Serial.print(F("I2C address: 0x"));
   if (slaveAddress < 0x10) Serial.print('0');
   Serial.println(slaveAddress, HEX);
@@ -311,6 +285,7 @@ void setup() {
   Wire.begin(slaveAddress);
   Wire.onReceive(onReceive);
   Wire.onRequest(onRequest);
+  Wire.setWireTimeout(25000, true);
 }
 
 // ─── loop() ────────────────────────────────────────────────────────────────
@@ -329,35 +304,25 @@ void loop() {
   pcountCopy   = regPulseCount;
   startReqCopy = startMotionRequest;
   stopReqCopy  = stopMotionRequest;
-  if (startMotionRequest) {
-    startMotionRequest = false;
-  }
-  if (stopMotionRequest) {
-    stopMotionRequest = false;
-  }
+  if (startMotionRequest) startMotionRequest = false;
+  if (stopMotionRequest)  stopMotionRequest  = false;
   interrupts();
 
-  digitalWrite(PIN_EN,  enCopy ? HIGH : LOW);
+  digitalWrite(PIN_EN,  enCopy  ? HIGH : LOW);
   digitalWrite(PIN_DIR, dirCopy ? HIGH : LOW);
 
-  if (periodCopy < 20) {
-    periodCopy = 20;
-  }
+  if (periodCopy < 20) periodCopy = 20;
   uint16_t halfPeriod = (periodCopy / 2);
-  if (halfPeriod < 10) {
-    halfPeriod = 10;
-  }
+  if (halfPeriod < 10) halfPeriod = 10;
 
   if (stopReqCopy) {
     stopMotionInternal(true);
   }
 
-  // Start enkel op expliciete enable=1 write
   if (!stopReqCopy && startReqCopy && enCopy) {
     beginMotionInternal(pcountCopy);
   }
 
-  // Als disabled -> zeker stoppen
   if (!enCopy && motionActive) {
     stopMotionInternal(true);
   }
@@ -388,102 +353,7 @@ void loop() {
     }
   }
 
-  // Update motioncomplete flag:
-  // - false zolang motion actief is of nog wacht op opstarten na enable
-  // - true in alle andere gevallen
   noInterrupts();
   regMotionComplete = !(motionStartPending || (motionActive && enCopy));
   interrupts();
-
-  // Debug RX
-  if (ENABLE_DEBUG_LOGS && rxEventPending) {
-    int     numBytesCopy;
-    uint8_t regCopy;
-    uint8_t valueCopy;
-    bool    hasValueCopy;
-    bool    overflowCopy;
-    bool    enableDbg;
-    uint8_t dirDbg;
-    uint16_t perDbg;
-    uint16_t cntDbg;
-    bool    motionDbg;
-
-    noInterrupts();
-    numBytesCopy = lastNumBytes;
-    regCopy      = lastReceivedRegister;
-    valueCopy    = lastReceivedValue;
-    hasValueCopy = lastReceivedHasValue;
-    overflowCopy = rxOverflow;
-    enableDbg    = regEnable;
-    dirDbg       = regDir;
-    perDbg       = regPeriodUs;
-    cntDbg       = regPulseCount;
-    motionDbg    = regMotionComplete;
-    rxEventPending = false;
-    rxOverflow = false;
-    interrupts();
-
-    Serial.print(F("[RX] bytes="));
-    Serial.print(numBytesCopy);
-    Serial.print(F(" reg=0x"));
-    if (regCopy < 0x10) Serial.print('0');
-    Serial.print(regCopy, HEX);
-
-    if (hasValueCopy) {
-      Serial.print(F(" value=0x"));
-      if (valueCopy < 0x10) Serial.print('0');
-      Serial.print(valueCopy, HEX);
-    } else {
-      Serial.print(F(" value=--"));
-    }
-
-    Serial.print(F(" ENABLE="));
-    Serial.print(enableDbg ? F("1") : F("0"));
-    Serial.print(F(" DIR="));
-    Serial.print(dirDbg ? F("1") : F("0"));
-    Serial.print(F(" periodUs="));
-    Serial.print(perDbg);
-    Serial.print(F(" pulseCount="));
-    Serial.print(cntDbg);
-    Serial.print(F(" motionComplete="));
-    Serial.println(motionDbg ? F("1") : F("0"));
-
-    if (overflowCopy) {
-      Serial.println(F("[WARN] Extra bytes ontvangen en weggegooid."));
-    }
-  }
-
-  // Debug TX
-  if (ENABLE_DEBUG_LOGS && txEventPending) {
-    uint8_t  regCopy;
-    bool     enDbg;
-    uint8_t  dirDbg;
-    uint16_t perDbg;
-    uint16_t cntDbg;
-    bool     motionDbg;
-
-    noInterrupts();
-    regCopy = currentRegister;
-    enDbg   = regEnable;
-    dirDbg  = regDir;
-    perDbg  = regPeriodUs;
-    cntDbg  = regPulseCount;
-    motionDbg = regMotionComplete;
-    txEventPending = false;
-    interrupts();
-
-    Serial.print(F("[TX] read reg=0x"));
-    if (regCopy < 0x10) Serial.print('0');
-    Serial.print(regCopy, HEX);
-    Serial.print(F(" ENABLE="));
-    Serial.print(enDbg ? F("1") : F("0"));
-    Serial.print(F(" DIR="));
-    Serial.print(dirDbg ? F("1") : F("0"));
-    Serial.print(F(" periodUs="));
-    Serial.print(perDbg);
-    Serial.print(F(" pulseCount="));
-    Serial.print(cntDbg);
-    Serial.print(F(" motionComplete="));
-    Serial.println(motionDbg ? F("1") : F("0"));
-  }
 }

@@ -11,24 +11,76 @@ class StepperController:
     low-level register access methods internal.
     """
     
-    def __init__(self, address: int | str, bus: int = const.I2C_BUS, steps_per_rev: int = const.STEPS_PER_REV):
+    def __init__(
+        self,
+        address: int | str,
+        bus: int = const.I2C_BUS,
+        steps_per_rev: int = const.STEPS_PER_REV,
+        i2c_retry_count: int = 3,
+        i2c_retry_delay: float = 0.05,
+        i2c_retry_backoff: float = 2.0,
+    ):
         """Create a controller for one stepper slave.
 
         Args:
             address: Low 4-bit address offset for the slave.
             bus: I2C bus number to open.
             steps_per_rev: Number of motor steps per full revolution.
+            i2c_retry_count: Number of retry attempts for transient I2C errors.
+            i2c_retry_delay: Initial delay in seconds before retrying.
+            i2c_retry_backoff: Multiplier for exponential backoff between retries.
         """
         if isinstance(address, str):
             address = int(address, 2)
+
+        if i2c_retry_count < 1:
+            raise ValueError("i2c_retry_count must be at least 1")
+        if i2c_retry_delay < 0:
+            raise ValueError("i2c_retry_delay must be >= 0")
+        if i2c_retry_backoff < 1:
+            raise ValueError("i2c_retry_backoff must be >= 1")
         
         self._address = const.BASE_I2C_ADDRESS | (address & 0x0F)
+        self._bus_id = bus
         self._bus = SMBus(bus)
         self._steps_per_rev = steps_per_rev
+        self._i2c_retry_count = int(i2c_retry_count)
+        self._i2c_retry_delay = float(i2c_retry_delay)
+        self._i2c_retry_backoff = float(i2c_retry_backoff)
 
     def close(self) -> None:
         """Close the I2C bus connection."""
         self._bus.close()
+
+    def _reopen_bus(self) -> None:
+        """Re-open the SMBus handle after a transient I2C failure."""
+        try:
+            self._bus.close()
+        except OSError:
+            pass
+        self._bus = SMBus(self._bus_id)
+
+    def _should_retry_i2c_error(self, error: OSError) -> bool:
+        """Return whether an OSError is typically transient on I2C."""
+        retryable_errnos = {5, 110, 121}
+        return error.errno in retryable_errnos
+
+    def _i2c_retry_delay_for_attempt(self, attempt: int) -> float:
+        """Compute exponential backoff delay for a retry attempt (1-based)."""
+        return self._i2c_retry_delay * (self._i2c_retry_backoff ** max(0, attempt - 1))
+
+    def _run_i2c_transaction(self, func):
+        """Run an SMBus transaction with retry/reopen on transient I2C failures."""
+        for attempt in range(1, self._i2c_retry_count + 1):
+            try:
+                return func()
+            except OSError as error:
+                is_last_attempt = attempt >= self._i2c_retry_count
+                if is_last_attempt or not self._should_retry_i2c_error(error):
+                    raise
+
+                time.sleep(self._i2c_retry_delay_for_attempt(attempt))
+                self._reopen_bus()
     
     def __enter__(self):
         """Enter a context manager block and return this controller."""
@@ -51,7 +103,7 @@ class StepperController:
             value: Value to write. Only the lowest 8 bits are used.
         """
         value = int(value) & 0xFF
-        self._bus.write_byte_data(self._address, reg, value & 0xFF)
+        self._run_i2c_transaction(lambda: self._bus.write_byte_data(self._address, reg, value & 0xFF))
     
     def _write_16(self, reg_high: int, value: int) -> None:
         """Write a 16-bit value to two consecutive registers.
@@ -65,9 +117,12 @@ class StepperController:
         value = int(value) & 0xFFFF
         high = (value >> 8) & 0xFF
         low = value & 0xFF
-        
-        self._bus.write_byte_data(self._address, reg_high, high)
-        self._bus.write_byte_data(self._address, reg_high + 1, low)
+
+        def transaction() -> None:
+            self._bus.write_byte_data(self._address, reg_high, high)
+            self._bus.write_byte_data(self._address, reg_high + 1, low)
+
+        self._run_i2c_transaction(transaction)
     
     def _read_8(self, reg: int) -> int:
         """Read an 8-bit value from a register.
@@ -78,7 +133,7 @@ class StepperController:
         Returns:
             The byte read from the register.
         """
-        return self._bus.read_byte_data(self._address, reg)
+        return self._run_i2c_transaction(lambda: self._bus.read_byte_data(self._address, reg))
     
     def _read_16(self, reg_high: int) -> int:
         """Read a 16-bit value from two consecutive registers.
@@ -91,9 +146,12 @@ class StepperController:
         Returns:
             The 16-bit value read from the registers.
         """
-        high = self._bus.read_byte_data(self._address, reg_high)
-        low = self._bus.read_byte_data(self._address, reg_high + 1)
-        return (high << 8) | low 
+        def transaction() -> int:
+            high = self._bus.read_byte_data(self._address, reg_high)
+            low = self._bus.read_byte_data(self._address, reg_high + 1)
+            return (high << 8) | low
+
+        return self._run_i2c_transaction(transaction)
     
     
     """-------- low-level control methods -------"""
