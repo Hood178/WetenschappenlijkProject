@@ -365,10 +365,15 @@ class StepperController:
             TimeoutError: If the timeout is exceeded.
         """
         start = time.time()
+        consecutive_complete_reads = 0
         while time.time() - start < timeout_sec:
             if not self.is_moving():
-                return True
-            time.sleep(0.01)
+                consecutive_complete_reads += 1
+                if consecutive_complete_reads >= 3:
+                    return True
+            else:
+                consecutive_complete_reads = 0
+            time.sleep(0.2)
         raise TimeoutError("Motion did not complete within timeout")
     
     def get_speed_percent(self) -> float:

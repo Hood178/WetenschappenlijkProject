@@ -71,6 +71,7 @@ volatile uint8_t  regDir               = 0;
 volatile uint16_t regPeriodUs          = 200;
 volatile uint16_t regPulseCount        = 0;
 volatile bool     regMotionComplete    = true;
+volatile bool     motionStartPending   = false;
 
 // trigger om nieuwe motion te starten vanuit loop()
 volatile bool startMotionRequest = false;
@@ -84,6 +85,7 @@ bool     pulseHighState     = false;
 uint32_t lastToggleMicros   = 0;
 
 // ─── Debug flags ───────────────────────────────────────────────────────────
+const bool ENABLE_DEBUG_LOGS = false;
 volatile bool rxEventPending = false;
 volatile bool txEventPending = false;
 
@@ -118,6 +120,7 @@ void stopMotionInternal(bool setCompleteFlag) {
   pulsesTarget     = 0;
   pulsesDone       = 0;
   pulseHighState   = false;
+  motionStartPending = false;
   lastToggleMicros = micros();
   digitalWrite(PIN_PUL, LOW);
 
@@ -128,6 +131,7 @@ void stopMotionInternal(bool setCompleteFlag) {
 
 void beginMotionInternal(uint16_t pulseCount) {
   motionActive      = true;
+  motionStartPending = false;
   continuousMode    = (pulseCount == 0);
   pulsesTarget      = pulseCount;
   pulsesDone        = 0;
@@ -172,6 +176,8 @@ void onReceive(int numBytes) {
     case REG_ENABLE:
       if (receivedValue != 0) {
         applyEnablePin(true);
+        motionStartPending = true;
+        regMotionComplete = false;
         startMotionRequest = true;   // start nieuwe motion in loop()
       } else {
         applyEnablePin(false);
@@ -359,13 +365,15 @@ void loop() {
     }
   }
 
-  // Update motioncomplete flag: false als pulsen worden verstuurd EN motor is enabled
+  // Update motioncomplete flag:
+  // - false zolang motion actief is of nog wacht op opstarten na enable
+  // - true in alle andere gevallen
   noInterrupts();
-  regMotionComplete = !(motionActive && enCopy);
+  regMotionComplete = !(motionStartPending || (motionActive && enCopy));
   interrupts();
 
   // Debug RX
-  if (rxEventPending) {
+  if (ENABLE_DEBUG_LOGS && rxEventPending) {
     int     numBytesCopy;
     uint8_t regCopy;
     uint8_t valueCopy;
@@ -423,7 +431,7 @@ void loop() {
   }
 
   // Debug TX
-  if (txEventPending) {
+  if (ENABLE_DEBUG_LOGS && txEventPending) {
     uint8_t  regCopy;
     bool     enDbg;
     uint8_t  dirDbg;
