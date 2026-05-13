@@ -14,11 +14,14 @@ def run_for_addresses(addrs: Iterable[str]) -> None:
         try:
             with StepperController(address=addr, bus=BUS, i2c_retry_count=5) as ctrl:
                 print("Connected")
-                ctrl.enable(True)
-                ctrl.set_speed_percent(30)
-                ctrl.move_steps(400, speed_percent=100, clockwise=True)
+                ctrl.move_degrees(2*360,100)
                 ctrl.wait_until_complete()
-                ctrl.move_degrees(1080, 100, clockwise=False)
+                ctrl.move_degrees(2*360,100,False)
+                ctrl.wait_until_complete()
+                ctrl.move_degrees(2*360,100)
+                ctrl.wait_until_complete()
+                ctrl.move_degrees(2*360,100,False)
+                ctrl.wait_until_complete()
                 try:
                     ctrl.wait_until_complete(timeout_sec=30)
                 except TimeoutError:

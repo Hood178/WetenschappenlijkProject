@@ -274,7 +274,7 @@ void setup() {
   stopMotionInternal(true);
 
   const uint8_t lowNibble = readDipAddressLowNibble();
-  uint8_t slaveAddress = (lowNibble & 0x0F);
+  uint8_t slaveAddress = 0x02 | (lowNibble & 0x0F);
 
   Serial.begin(115200);
   delay(2000);
