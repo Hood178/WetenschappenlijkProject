@@ -33,7 +33,6 @@ The controller communicates with an Arduino slave over I2C using a register-base
 ### Register Map
 
 The slave device exposes the following I2C registers:
-```
 
 | Address | Name | Type | Size | Purpose |
 |---------|------|------|------|---------|
