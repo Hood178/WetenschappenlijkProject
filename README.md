@@ -229,12 +229,10 @@ with StepperController(address=0, bus=1) as motor:
 
 ### Examples
 
-See complete examples in `Master/`:
-- **draw_robot.py** – Multi-axis drawing with two motors
-- **main.py** – Alternative control patterns
-- **continuous.py** – Continuous motion example
+See the complete example in `Master/`:
+- **draw_robot.py** – Multi-axis drawing application with two motors running in parallel
 
-For detailed API documentation, see [Master/CONTROLLER_DOCUMENTATION.md](Master/CONTROLLER_DOCUMENTATION.md).
+For detailed API documentation and more usage patterns, see [Master/CONTROLLER_DOCUMENTATION.md](Master/CONTROLLER_DOCUMENTATION.md).
 
 ---
 
@@ -289,8 +287,6 @@ stepper-motor/
 ├── Master/
 │   ├── CONTROLLER_DOCUMENTATION.md        # Complete Python API reference
 │   ├── draw_robot.py                      # Multi-axis drawing example
-│   ├── main.py                            # Alternative usage example
-│   ├── continuous.py                      # Continuous motion example
 │   └── src/stepper_i2c/
 │       ├── __init__.py                    # Package init
 │       ├── controller.py                  # Main StepperController class
