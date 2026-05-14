@@ -21,26 +21,29 @@
 The controller communicates with an Arduino slave over I2C using a register-based interface. The slave device maintains the state of the motor (enabled/disabled, direction, speed, pulse count) and handles the hardware timing for pulse generation.
 
 ```
-Master (Python)                    I2C Bus                    Slave (Arduino)
-┌──────────────────┐          ┌──────────────┐          ┌──────────────────┐
+  Master (Python)                   I2C Bus                  Slave (Arduino)
+┌──────────────────┐           ┌──────────────┐           ┌──────────────────┐
 │ StepperController├───────────┤ I2C Bus (SMB)├───────────┤ Arduino DM320T   │
-│                  │          │              │          │ Controller       │
-│ - High-level API │          │ Register Map │          │ - Hardware timing│
-│ - I2C commands   │          │              │          │ - Pin control    │
-└──────────────────┘          └──────────────┘          └──────────────────┘
+│                  │           │              │           │ Controller       │
+│ - High-level API │           │ Register Map │           │ - Hardware timing│
+│ - I2C commands   │           │              │           │ - Pin control    │
+└──────────────────┘           └──────────────┘           └──────────────────┘
 ```
 
 ### Register Map
 
 The slave device exposes the following I2C registers:
+```
 
-| Address | Name | Type | Purpose |
-|---------|------|------|---------|
-| 0x00 | REG_ENABLE | R/W | Enable/disable driver (1 byte: 0x00 or 0x01) |
-| 0x01 | REG_DIRECTION | R/W | Motor direction (1 byte: 0x00=forward, 0x01=reverse) |
-| 0x02-0x03 | REG_PERIOD_US | R/W | Step period in microseconds (2 bytes, big-endian) |
-| 0x04-0x05 | REG_PCOUNT | R/W | Pulse count for finite moves (2 bytes, big-endian) |
-| 0x06 | MOTION_COMPLETE_FLAG | R | Motion status (0x00=moving, 0x01=complete) |
+|  Address  |         Name         | Type |                        Purpose                       |
+|-----------|----------------------|------|------------------------------------------------------|
+| 0x00      | REG_ENABLE           | R/W  | Enable/disable driver (1 byte: 0x00 or 0x01)         |
+| 0x01      | REG_DIRECTION        | R/W  | Motor direction (1 byte: 0x00=forward, 0x01=reverse) |
+| 0x02-0x03 | REG_PERIOD_US        | R/W  | Step period in microseconds (2 bytes, big-endian)    |
+| 0x04-0x05 | REG_PCOUNT           | R/W  | Pulse count for finite moves (2 bytes, big-endian)   |
+| 0x06      | MOTION_COMPLETE_FLAG | R    | Motion status (0x00=moving, 0x01=complete)           |
+|-----------|----------------------|------|------------------------------------------------------|
+```
 
 **Motion Modes:**
 - **Continuous:** Set `REG_PCOUNT` to 0; motor runs indefinitely until disabled
