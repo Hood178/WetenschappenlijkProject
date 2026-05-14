@@ -3,96 +3,281 @@
 ## Overview
 
 A complete stepper motor control system consisting of:
-- **Arduino Nano R4 Slave**: I2C slave that controls a DM320T stepper motor driver
-- **Python Master Controller**: High-level Python API for remote motor control via I2C
+- **Arduino Nano R4 Slave** (`Slave/`): I2C slave microcontroller that directly controls a DM320T stepper motor driver via PWM and GPIO
+- **Python Master Controller** (`Master/`): High-level Python API for remote motor control via I2C from Raspberry Pi or Linux computer
 
----
+### Architecture
 
-## Hardware Setup
-
-### Arduino Nano R4 Pin Mapping
-
-| Signal | Arduino Pin | DM320T Driver Pin |
-|--------|-------------|-------------------|
-| PUL (Pulse) | 9 | STEP |
-| DIR (Direction) | 8 | DIR |
-| EN (Enable) | 7 | ENABLE |
-| SDA | 18 | – |
-| SCL | 19 | – |
-| GND | GND | GND |
-
-### Address Configuration
-
-The I2C slave address is configured via 4 DIP switches on pins 2–5:
-
-| DIP Switch | Arduino Pin |
-|------------|-------------|
-| S0 | 5 |
-| S1 | 4 |
-| S2 | 3 |
-| S3 | 2 |
-
-The 7-bit slave address is calculated as: **0x20 + (DIP nibble)**
-
-**Examples:**
-- All switches OFF (0000): address **0x20**
-- Binary 1000: address **0x28**
-- Binary 1111: address **0x2F**
-
----
-
-## I2C Register Map
-
-### Write/Read Registers (Master ↔ Slave)
-
-| Address | Name | Type | Description |
-|---------|------|------|-------------|
-| 0x00 | REG_ENABLE | R/W | Enable/disable driver (0x00 or 0x01) |
-| 0x01 | REG_DIRECTION | R/W | Motor direction (0x00=forward, 0x01=reverse) |
-| 0x02–0x03 | REG_PERIOD_US | R/W | Step period in microseconds (16-bit big-endian) |
-| 0x04–0x05 | REG_PCOUNT | R/W | Pulse count for finite moves (16-bit big-endian) |
-| 0x06 | MOTION_COMPLETE_FLAG | R | Motion status (0x00=moving, 0x01=complete) |
-
-### Motion Modes
-
-- **Continuous**: Set `REG_PCOUNT` to 0 → motor runs indefinitely
-- **Finite**: Set `REG_PCOUNT` to N > 0 → motor executes exactly N pulses then stops
-
----
-
-## Python Master Setup
-
-### Installation
-
-```bash
-cd Master
-pip install smbus2
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Master (Python)                          │
+│                   - High-level API                          │
+│               - Motor control commands                      │
+│                - Error handling & retry                     │
+└────────────┬────────────────────────────────────────────────┘
+             │ I2C Bus (SMBus) - 400 kHz
+             │ SDA (GPIO 2) / SCL (GPIO 3) on RPi
+             ↓
+┌─────────────────────────────────────────────────────────────┐
+│              Arduino Nano R4 (Slave)                        │
+│        - I2C register interface (0x20-0x2F)                 │
+│        - Motion state machine                               │
+│        - Hardware PWM pulse generation                      │
+│        - DIP-switch address configuration                   │
+└────┬────────────────────────────────────────┬───────────────┘
+     │ GPIO Pins                              │ I2C
+     ├─ Pin 7 (EN)  ────→ DM320T ENABLE       ├─ SDA (pin 18)
+     ├─ Pin 8 (DIR) ────→ DM320T DIRECTION    └─ SCL (pin 19)
+     └─ Pin 9 (PUL) ────→ DM320T PULSE
+             ↓
+    ┌────────────────────┐
+    │  DM320T Stepper    │
+    │ Motor Driver       │
+    │ (with A4988-like   │
+    │  interface)        │
+    └────────────────────┘
+             ↓
+    ┌────────────────────┐
+    │  Stepper Motor     │
+    │  (NEMA17, etc.)    │
+    └────────────────────┘
 ```
 
-### Usage Example
+---
+
+## Quick Start
+
+### 1. Arduino Setup (Slave)
+
+#### Hardware Requirements
+- Arduino Nano R4 Wifi
+- DM320T Stepper Driver (or compatible A4988/DRV8825)
+- Stepper Motor (e.g., NEMA17 with 200 steps/rev)
+- 4x DIP Switches (for I2C address configuration)
+- Breadboard & jumper wires
+
+#### Wiring
+
+| Signal | Arduino Pin | DM320T Pin | Purpose |
+|--------|-------------|-----------|---------|
+| **PUL** | 9 | STEP | Pulse signal (rising edge = one step) |
+| **DIR** | 8 | DIR | Direction control (HIGH=forward, LOW=reverse) |
+| **EN** | 7 | ENABLE | Enable driver (HIGH=enabled, LOW=disabled) |
+| **SDA** | 18 | – | I2C data line |
+| **SCL** | 19 | – | I2C clock line |
+| **GND** | GND | GND | Common ground |
+| **5V** | 5V | Logic VCC | Arduino 5V logic supply |
+| – | VMOT | VMOT | Motor power supply (separate 12-24V) |
+
+#### I2C Address Configuration (DIP Switches)
+
+The Arduino's I2C slave address is configured via 4 DIP switches on Arduino pins 2, 3, 4, 5:
+
+| DIP | Pin | Binary Pos | When OFF | When ON |
+|-----|-----|-----------|----------|---------|
+| S0 | 5 | bit 0 | → address bit 0 | → address bit 0 |
+| S1 | 4 | bit 1 | → address bit 1 | → address bit 1 |
+| S2 | 3 | bit 2 | → address bit 2 | → address bit 2 |
+| S3 | 2 | bit 3 | → address bit 3 | → address bit 3 |
+
+**Final I2C Address = 0x20 + (DIP nibble value)**
+
+**Common Configurations:**
+- All OFF (0000): **0x20**
+- Bit 3 ON (1000): **0x28** 
+- Bit 0 ON (0001): **0x21**
+- All ON (1111): **0x2F**
+
+#### Upload Arduino Sketch
+
+1. Install [Arduino IDE](https://www.arduino.cc/en/software)
+2. Open `Slave/StepperMotorController/StepperMotorController.ino`
+3. Select Board: **Arduino Nano 33 IoT** (or appropriate R4 variant)
+4. Select Port: `/dev/ttyUSB0` or `/dev/ttyACM0` (Linux) or `COM3` (Windows)
+5. Click **Upload**
+
+---
+
+### 2. Python Setup (Master)
+
+#### Installation
+
+```bash
+# Install Python dependencies
+cd Master
+pip install smbus2
+
+# Optional: For development
+pip install -e src/
+```
+
+#### Verify I2C Connection
+
+```bash
+# List connected I2C devices
+i2cdetect -y 1
+
+# Expected output: Your Arduino address (e.g., 0x20, 0x28)
+```
+
+#### Quick Test
 
 ```python
 from src.stepper_i2c import StepperController
 
-# Create controller for slave at address 0x20 (DIP switches all OFF)
+# Create controller (address depends on DIP switch configuration)
 with StepperController(address=0, bus=1) as motor:
-    # Set direction and speed
+    print("Motor State:", motor.get_state())
+    
+    # Move 100 steps at 50% speed
+    motor.move_steps(100, speed_percent=50.0, clockwise=True)
+    motor.wait_until_complete(timeout_sec=10)
+    
+    print("Done!")
+```
+
+---
+
+## I2C Protocol Reference
+
+### Register Map
+
+All communication uses SMBus read/write operations on these registers:
+
+| Addr | Name | Type | Size | Purpose |
+|------|------|------|------|---------|
+| 0x00 | REG_ENABLE | R/W | 1 B | Enable/disable driver and start motion |
+| 0x01 | REG_DIRECTION | R/W | 1 B | Motor direction (0x00=fwd, 0x01=rev) |
+| 0x02 | REG_PERIOD_US_H | R/W | 1 B | Step period high byte (big-endian) |
+| 0x03 | REG_PERIOD_US_L | R/W | 1 B | Step period low byte (period in µs) |
+| 0x04 | REG_PCOUNT_H | R/W | 1 B | Pulse count high byte (big-endian) |
+| 0x05 | REG_PCOUNT_L | R/W | 1 B | Pulse count low byte (0=continuous, >0=finite) |
+| 0x06 | MOTION_COMPLETE | R | 1 B | Motion status (0x00=busy, 0x01=idle) |
+
+### Communication Example (SMBus)
+
+```python
+import smbus2
+
+bus = smbus2.SMBus(1)  # I2C bus 1
+address = 0x20         # Arduino Nano at DIP=0000
+
+# Set direction to clockwise (0x01)
+bus.write_byte_data(address, 0x01, 0x01)
+
+# Set speed to 50% (period = 33,267 µs in big-endian)
+period = 33267
+bus.write_byte_data(address, 0x02, (period >> 8) & 0xFF)   # high byte
+bus.write_byte_data(address, 0x03, period & 0xFF)          # low byte
+
+# Set pulse count to 200 (move 200 steps)
+bus.write_byte_data(address, 0x04, 0x00)    # high byte
+bus.write_byte_data(address, 0x05, 200)     # low byte
+
+# Enable motor and start motion
+bus.write_byte_data(address, 0x00, 0x01)
+
+# Poll for completion
+while True:
+    status = bus.read_byte_data(address, 0x06)
+    if status == 0x01:  # Motion complete
+        break
+    time.sleep(0.1)
+
+# Disable motor
+bus.write_byte_data(address, 0x00, 0x00)
+bus.close()
+```
+
+### Motion Modes
+
+**Finite Move (Position-based motion):**
+```
+REG_PCOUNT = N (where N > 0)
+Motor executes exactly N pulses, then stops automatically.
+```
+
+**Continuous Mode (Free-running):**
+```
+REG_PCOUNT = 0
+Motor runs continuously at set speed while REG_ENABLE = 0x01.
+```
+
+---
+
+## Python API Usage
+
+### Basic Control
+
+```python
+from src.stepper_i2c import StepperController
+
+with StepperController(address=0, bus=1) as motor:
+    # Get current state
+    state = motor.get_state()
+    print(f"Speed: {state['speed_percent']}%")
+    print(f"Moving: {state['enabled'] and not state.get('is_complete', True)}")
+    
+    # Control motor
     motor.set_direction(clockwise=True)
-    motor.set_speed_percent(50.0)
+    motor.set_speed_percent(75.0)
+    motor.enable(True)
     
-    # Move 500 steps
-    motor.move_steps(500, speed_percent=75.0)
-    motor.wait_until_complete(timeout_sec=30.0)
-    
-    # Run continuously
-    motor.run_continuous(speed_percent=60.0)
-    # ... motor runs until stopped
+    # Stop
     motor.stop()
 ```
 
-### API Documentation
+### Examples
 
-See [CONTROLLER_DOCUMENTATION.md](Master/CONTROLLER_DOCUMENTATION.md) for comprehensive API reference and examples.
+See complete examples in `Master/`:
+- **draw_robot.py** – Multi-axis drawing with two motors
+- **main.py** – Alternative control patterns
+- **continuous.py** – Continuous motion example
+
+For detailed API documentation, see [Master/CONTROLLER_DOCUMENTATION.md](Master/CONTROLLER_DOCUMENTATION.md).
+
+---
+
+## Troubleshooting
+
+### Arduino Won't Upload
+- Check USB cable (data cable, not power-only)
+- Verify correct board selected: **Arduino Nano 33 IoT** or **Arduino Nano 4 Wifi**
+- Try different USB port
+- Update Arduino IDE bootloader
+
+### I2C Not Detected
+```bash
+# Check if Arduino is visible
+i2cdetect -y 1
+
+# If not visible:
+# 1. Verify SDA/SCL wiring (pins 18/19 on Nano R4)
+# 2. Check pull-up resistors (typically 2.2kΩ required)
+# 3. Verify DIP switch setting matches your slave address
+```
+
+### Motor Not Moving
+1. **Check DIP switches** – Verify address matches Python code
+2. **Verify hardware wiring** – EN, DIR, PUL pins connected
+3. **Test with Python**:
+   ```python
+   motor.get_state()  # Check if slave responds
+   motor.enable(True)  # Try enabling
+   ```
+4. **Check period value** – Must be between 1000-65535 µs (controlled by Arduino)
+5. **Verify motor supply voltage** – VMOT should be 12-24V (depends on driver)
+
+### Intermittent I2C Errors
+- Add 100nF capacitors near Arduino 5V and GND
+- Reduce I2C cable length or shield cables
+- Use pull-up resistors on SDA/SCL (2.2k-10k)
+- Enable I2C retry in Python: `i2c_retry_count=5`
+
+### Motion Too Fast/Slow
+- Use Python API: `motor.set_speed_percent(50.0)` for direct control
+- Speed range: 0% (slowest) to 100% (fastest)
+- Minimum practical period: 1000 µs (Arduino enforces minimum 20 µs)
 
 ---
 
@@ -100,37 +285,58 @@ See [CONTROLLER_DOCUMENTATION.md](Master/CONTROLLER_DOCUMENTATION.md) for compre
 
 ```
 stepper-motor/
+├── README.md                              # This file
 ├── Master/
-│   ├── CONTROLLER_DOCUMENTATION.md    # Complete API documentation
-│   ├── draw_robot.py                  # Example drawing application
-│   ├── main.py                        # Alternative example
-│   ├── continuous.py                  # Continuous motion example
+│   ├── CONTROLLER_DOCUMENTATION.md        # Complete Python API reference
+│   ├── draw_robot.py                      # Multi-axis drawing example
+│   ├── main.py                            # Alternative usage example
+│   ├── continuous.py                      # Continuous motion example
 │   └── src/stepper_i2c/
-│       ├── __init__.py
-│       ├── controller.py              # Main controller class
-│       └── constants.py               # I2C register definitions
+│       ├── __init__.py                    # Package init
+│       ├── controller.py                  # Main StepperController class
+│       └── constants.py                   # I2C register definitions
 └── Slave/
     └── StepperMotorController/
-        └── StepperMotorController.ino # Arduino sketch
+        └── StepperMotorController.ino     # Arduino sketch (I2C slave)
 ```
 
 ---
 
 ## Key Features
 
-✅ High-level Python API for motor control  
-✅ I2C register-based communication  
-✅ Speed control (percentage or RPM)  
-✅ Relative motion support (steps, degrees, revolutions)  
-✅ Continuous and finite motion modes  
-✅ Motion completion detection  
-✅ I2C error retry with exponential backoff  
-✅ Context manager support for resource management  
+✅ **Arduino Slave:**
+- I2C register-based interface
+- DIP-configurable slave address (0x20-0x2F)
+- Hardware PWM pulse generation
+- Motion state machine (continuous/finite modes)
+- Robust I2C communication with timeout
+
+✅ **Python Master:**
+- High-level API for motor control
+- Speed control in % or RPM
+- Relative motion (steps, degrees, revolutions)
+- I2C error retry with exponential backoff
+- Context manager for resource management
+- Motion completion detection
+
+---
+
+## Specifications
+
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| I2C Bus Speed | 400 kHz | Standard SMBus speed |
+| I2C Address Range | 0x20–0x2F | 16 possible addresses via DIP |
+| Step Period Range | 20–65535 µs | Arduino: min 20 µs, Python: min 1000 µs |
+| Pulse Count | 0–65535 | 0 = continuous, >0 = finite move |
+| Motion Completion Check | Polling | Read REG_MOTION_COMPLETE_FLAG |
+| Max Simultaneous Motors | 16 | Limited by I2C addresses (one per master) |
 
 ---
 
 ## Notes
 
-- **No position tracking**: Controller supports relative motion only
-- **Speed range**: 0% (slowest, 65535 µs period) to 100% (fastest, 1000 µs period)
-- **Default parameters**: 200 steps/rev, I2C bus 1, 50% speed
+- **No position tracking** – All motion is relative
+- **I2C timeout** – Arduino has 25ms timeout on I2C; if master stalls, Arduino resets
+- **Step period minimum** – Arduino enforces minimum 20 µs period (Python default 1000 µs for stability)
+- **Separate power supplies recommended** – Motor supply (12-24V) separate from logic (5V)

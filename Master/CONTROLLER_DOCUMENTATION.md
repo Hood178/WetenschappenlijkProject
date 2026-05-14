@@ -34,13 +34,15 @@ Master (Python)                    I2C Bus                    Slave (Arduino)
 
 The slave device exposes the following I2C registers:
 
-| Address | Name | Type | Purpose |
-|---------|------|------|---------|
-| 0x00 | REG_ENABLE | R/W | Enable/disable driver (1 byte: 0x00 or 0x01) |
-| 0x01 | REG_DIRECTION | R/W | Motor direction (1 byte: 0x00=forward, 0x01=reverse) |
-| 0x02-0x03 | REG_PERIOD_US | R/W | Step period in microseconds (2 bytes, big-endian) |
-| 0x04-0x05 | REG_PCOUNT | R/W | Pulse count for finite moves (2 bytes, big-endian) |
-| 0x06 | MOTION_COMPLETE_FLAG | R | Motion status (0x00=moving, 0x01=complete) |
+| Address | Name | Type | Size | Purpose |
+|---------|------|------|------|---------|
+| 0x00 | REG_ENABLE | R/W | 1 byte | Enable/disable driver (`0x00`=disabled, `0x01`=enabled + start motion) |
+| 0x01 | REG_DIRECTION | R/W | 1 byte | Motor direction (`0x00`=forward, `0x01`=reverse) |
+| 0x02 | REG_PERIOD_US_H | R/W | 1 byte | Step period high byte (part of 16-bit big-endian value) |
+| 0x03 | REG_PERIOD_US_L | R/W | 1 byte | Step period low byte (combined: period = (H << 8) \| L, in µs) |
+| 0x04 | REG_PCOUNT_H | R/W | 1 byte | Pulse count high byte (part of 16-bit big-endian value) |
+| 0x05 | REG_PCOUNT_L | R/W | 1 byte | Pulse count low byte (combined: count = (H << 8) \| L) |
+| 0x06 | MOTION_COMPLETE_FLAG | R | 1 byte | Motion status (`0x00`=moving, `0x01`=complete/idle) |
 
 **Motion Modes:**
 - **Continuous:** Set `REG_PCOUNT` to 0; motor runs indefinitely until disabled
