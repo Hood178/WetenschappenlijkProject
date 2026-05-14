@@ -19,6 +19,7 @@ class StepperController:
         i2c_retry_count: int = 3,
         i2c_retry_delay: float = 0.05,
         i2c_retry_backoff: float = 2.0,
+        invert: bool = False,
     ):
         """Create a controller for one stepper slave.
 
@@ -29,6 +30,8 @@ class StepperController:
             i2c_retry_count: Number of retry attempts for transient I2C errors.
             i2c_retry_delay: Initial delay in seconds before retrying.
             i2c_retry_backoff: Multiplier for exponential backoff between retries.
+            invert: If True, inverts all direction commands (clockwise becomes counter-clockwise and vice versa).
+                    Useful when motor is physically oriented differently. Default: False
         """
         if isinstance(address, str):
             address = int(address, 2)
@@ -47,6 +50,7 @@ class StepperController:
         self._i2c_retry_count = int(i2c_retry_count)
         self._i2c_retry_delay = float(i2c_retry_delay)
         self._i2c_retry_backoff = float(i2c_retry_backoff)
+        self._invert = bool(invert)
 
     def close(self) -> None:
         """Close the I2C bus connection."""
@@ -174,13 +178,16 @@ class StepperController:
 
         Args:
             clockwise: True for clockwise, False for counter-clockwise.
+                      If invert=True was set during initialization, this will be flipped.
 
         Raises:
             ValueError: If clockwise is not a boolean.
         """
         if not isinstance(clockwise, bool):
             raise ValueError("clockwise must be a boolean")
-        self._write_8(const.REG_DIRECTION, 0x01 if clockwise else 0x00)
+        # Invert direction if invert flag is set
+        actual_direction = not clockwise if self._invert else clockwise
+        self._write_8(const.REG_DIRECTION, 0x01 if actual_direction else 0x00)
     
     def _set_period_us(self, period_us: float) -> None:
         """Set the step period in microseconds.

@@ -165,7 +165,7 @@ with StepperController(address=0) as motor:
 
 ### Initialization
 
-#### `__init__(address: int | str, bus: int = 1, steps_per_rev: int = 200, i2c_retry_count: int = 3, i2c_retry_delay: float = 0.05, i2c_retry_backoff: float = 2.0)`
+#### `__init__(address: int | str, bus: int = 1, steps_per_rev: int = 200, i2c_retry_count: int = 3, i2c_retry_delay: float = 0.05, i2c_retry_backoff: float = 2.0, invert: bool = False)`
 
 Create a new stepper controller instance.
 
@@ -176,11 +176,13 @@ Create a new stepper controller instance.
 - `i2c_retry_count` (int, optional): Number of retry attempts for transient I2C errors. Default: 3
 - `i2c_retry_delay` (float, optional): Initial delay in seconds before retrying. Default: 0.05
 - `i2c_retry_backoff` (float, optional): Multiplier for exponential backoff between retries. Default: 2.0
+- `invert` (bool, optional): If True, inverts all direction commands. Useful when motor is physically oriented differently (clockwise becomes counter-clockwise). Default: False
 
 **Example:**
 ```python
 motor = StepperController(address=0, bus=1, steps_per_rev=200)
 motor = StepperController(address="0101", bus=1)  # Binary address
+motor = StepperController(address=0, invert=True)  # Motor runs in opposite direction
 ```
 
 ---
@@ -352,12 +354,16 @@ print(f"Current speed: {speed}%")
 Set the motor rotation direction.
 
 **Parameters:**
-- `clockwise` (bool): True for clockwise, False for counter-clockwise
+- `clockwise` (bool): True for clockwise, False for counter-clockwise. If `invert=True` was set during initialization, this direction will be automatically flipped.
 
 **Example:**
 ```python
-motor.set_direction(clockwise=True)   # Clockwise
-motor.set_direction(clockwise=False)  # Counter-clockwise
+motor.set_direction(clockwise=True)   # Clockwise (or counter-clockwise if invert=True)
+motor.set_direction(clockwise=False)  # Counter-clockwise (or clockwise if invert=True)
+
+# With invert flag:
+motor_inverted = StepperController(address=0, invert=True)
+motor_inverted.set_direction(clockwise=True)  # Motor actually runs counter-clockwise
 ```
 
 ---
@@ -501,6 +507,25 @@ Speed percentage maps inversely to step period:
 - **0%** = slowest motion (period = 65535 µs)
 - **50%** = medium speed (period ≈ 33267 µs)
 - **100%** = fastest motion (period = 1000 µs)
+
+### Direction Inversion
+
+If your motor is physically oriented differently and you want all commands to run in the opposite direction, use the `invert` parameter:
+
+```python
+# Motor runs opposite to natural orientation
+motor = StepperController(address=0, invert=True)
+
+motor.set_direction(clockwise=True)    # Motor actually runs counter-clockwise
+motor.move_degrees(90, clockwise=True) # Rotates -90 degrees instead of +90
+```
+
+This inversion applies to **all direction-related commands**:
+- `set_direction()`
+- `move_steps()`
+- `move_degrees()`
+- `rotate()`
+- `run_continuous()`
 
 ### I2C Addressing
 
