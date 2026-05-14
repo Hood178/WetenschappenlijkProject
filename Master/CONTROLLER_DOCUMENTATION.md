@@ -21,19 +21,21 @@
 The controller communicates with an Arduino slave over I2C using a register-based interface. The slave device maintains the state of the motor (enabled/disabled, direction, speed, pulse count) and handles the hardware timing for pulse generation.
 
 ```
-Master (Python)                    I2C Bus                    Slave (Arduino)
-┌──────────────────┐          ┌──────────────┐          ┌──────────────────┐
+  Master (Python)                   I2C Bus                  Slave (Arduino)
+┌──────────────────┐           ┌──────────────┐           ┌──────────────────┐
 │ StepperController├───────────┤ I2C Bus (SMB)├───────────┤ Arduino DM320T   │
-│                  │          │              │          │ Controller       │
-│ - High-level API │          │ Register Map │          │ - Hardware timing│
-│ - I2C commands   │          │              │          │ - Pin control    │
-└──────────────────┘          └──────────────┘          └──────────────────┘
+│                  │           │              │           │ Controller       │
+│ - High-level API │           │ Register Map │           │ - Hardware timing│
+│ - I2C commands   │           │              │           │ - Pin control    │
+└──────────────────┘           └──────────────┘           └──────────────────┘
 ```
 
 ### Register Map
 
 The slave device exposes the following I2C registers:
+```
 
+<<<<<<< HEAD
 | Address | Name | Type | Size | Purpose |
 |---------|------|------|------|---------|
 | 0x00 | REG_ENABLE | R/W | 1 byte | Enable/disable driver (`0x00`=disabled, `0x01`=enabled + start motion) |
@@ -43,6 +45,17 @@ The slave device exposes the following I2C registers:
 | 0x04 | REG_PCOUNT_H | R/W | 1 byte | Pulse count high byte (part of 16-bit big-endian value) |
 | 0x05 | REG_PCOUNT_L | R/W | 1 byte | Pulse count low byte (combined: count = (H << 8) \| L) |
 | 0x06 | MOTION_COMPLETE_FLAG | R | 1 byte | Motion status (`0x00`=moving, `0x01`=complete/idle) |
+=======
+|  Address  |         Name         | Type |                        Purpose                       |
+|-----------|----------------------|------|------------------------------------------------------|
+| 0x00      | REG_ENABLE           | R/W  | Enable/disable driver (1 byte: 0x00 or 0x01)         |
+| 0x01      | REG_DIRECTION        | R/W  | Motor direction (1 byte: 0x00=forward, 0x01=reverse) |
+| 0x02-0x03 | REG_PERIOD_US        | R/W  | Step period in microseconds (2 bytes, big-endian)    |
+| 0x04-0x05 | REG_PCOUNT           | R/W  | Pulse count for finite moves (2 bytes, big-endian)   |
+| 0x06      | MOTION_COMPLETE_FLAG | R    | Motion status (0x00=moving, 0x01=complete)           |
+|-----------|----------------------|------|------------------------------------------------------|
+```
+>>>>>>> 43766ae24e0383fe73bfebfdd2858084ccb8a6b4
 
 **Motion Modes:**
 - **Continuous:** Set `REG_PCOUNT` to 0; motor runs indefinitely until disabled
@@ -170,9 +183,9 @@ with StepperController(address=0) as motor:
 Create a new stepper controller instance.
 
 **Parameters:**
-- `address` (int or str): Low 4-bit I2C address offset (0-15 or "0000"-"1111" binary). Final I2C address = base (0x20) + offset
+- `address` (int or str): Low 4-bit I2C address offset (0-15 or "0000"-"1111" binary). Final I2C address = base (0x20) (module address) + offset
 - `bus` (int, optional): I2C bus number. Default: 1
-- `steps_per_rev` (int, optional): Motor steps per full revolution. Default: 200
+- `steps_per_rev` (int, optional): Motor steps per full revolution. (can be set by flipping switches on driver module) Default: 200
 - `i2c_retry_count` (int, optional): Number of retry attempts for transient I2C errors. Default: 3
 - `i2c_retry_delay` (float, optional): Initial delay in seconds before retrying. Default: 0.05
 - `i2c_retry_backoff` (float, optional): Multiplier for exponential backoff between retries. Default: 2.0
@@ -470,6 +483,7 @@ with StepperController(address=0) as motor:
 ## Constants
 
 Constants are defined in `stepper_i2c/constants.py`:
+You are not supposed to change these but you can if you really want to.
 
 ```python
 BASE_I2C_ADDRESS = 0x20  # Base I2C address
@@ -549,7 +563,3 @@ Adjust speed using `set_speed_percent()` or `set_speed_rpm()`. Note that very hi
 If `wait_until_complete()` times out, increase the timeout value or check if the motor is mechanically stuck.
 
 ---
-
-## License
-
-See repository LICENSE file.
