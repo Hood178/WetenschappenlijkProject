@@ -163,18 +163,22 @@ with StepperController(address=0) as motor:
 
 ### Initialization
 
-#### `__init__(address: int, bus: int = 1, steps_per_rev: int = 200)`
+#### `__init__(address: int | str, bus: int = 1, steps_per_rev: int = 200, i2c_retry_count: int = 3, i2c_retry_delay: float = 0.05, i2c_retry_backoff: float = 2.0)`
 
 Create a new stepper controller instance.
 
 **Parameters:**
-- `address` (int): Low 4-bit I2C address offset (0-15). Final I2C address = base (0x08) + offset
+- `address` (int or str): Low 4-bit I2C address offset (0-15 or "0000"-"1111" binary). Final I2C address = base (0x20) + offset
 - `bus` (int, optional): I2C bus number. Default: 1
 - `steps_per_rev` (int, optional): Motor steps per full revolution. Default: 200
+- `i2c_retry_count` (int, optional): Number of retry attempts for transient I2C errors. Default: 3
+- `i2c_retry_delay` (float, optional): Initial delay in seconds before retrying. Default: 0.05
+- `i2c_retry_backoff` (float, optional): Multiplier for exponential backoff between retries. Default: 2.0
 
 **Example:**
 ```python
 motor = StepperController(address=0, bus=1, steps_per_rev=200)
+motor = StepperController(address="0101", bus=1)  # Binary address
 ```
 
 ---
@@ -281,7 +285,7 @@ Set motor speed as a percentage of maximum speed.
 **Parameters:**
 - `speed_percent` (float): Speed percentage (0-100)
   - 0% = slowest (maximum step period = 65535 µs)
-  - 100% = fastest (minimum step period = 20 µs)
+  - 100% = fastest (minimum step period = 1000 µs)
 
 **Example:**
 ```python
@@ -466,10 +470,10 @@ with StepperController(address=0) as motor:
 Constants are defined in `stepper_i2c/constants.py`:
 
 ```python
-BASE_I2C_ADDRESS = 0x08  # Base I2C address
+BASE_I2C_ADDRESS = 0x20  # Base I2C address
 I2C_BUS = 1              # Default I2C bus number
 STEPS_PER_REV = 200      # Standard stepper motor steps per revolution
-MIN_PERIOD_US = 20       # Minimum step period (fastest speed)
+MIN_PERIOD_US = 1000     # Minimum step period (fastest speed)
 MAX_PERIOD_US = 65535    # Maximum step period (slowest speed)
 ```
 
@@ -492,8 +496,8 @@ All motion is **relative** to wherever the motor currently is.
 
 Speed percentage maps inversely to step period:
 - **0%** = slowest motion (period = 65535 µs)
-- **50%** = medium speed (period ≈ 32777 µs)
-- **100%** = fastest motion (period = 20 µs)
+- **50%** = medium speed (period ≈ 33267 µs)
+- **100%** = fastest motion (period = 1000 µs)
 
 ### I2C Addressing
 
@@ -502,7 +506,10 @@ The final I2C address is calculated as:
 Final Address = BASE_I2C_ADDRESS | (address & 0x0F)
 ```
 
-For example, `StepperController(address=0)` connects to I2C address `0x08`.
+For example:
+- `StepperController(address=0)` connects to I2C address `0x20`
+- `StepperController(address="1000")` connects to I2C address `0x28` (0x20 | 0x08)
+- `StepperController(address=15)` connects to I2C address `0x2F` (0x20 | 0x0F)
 
 ### Motion Completion
 
