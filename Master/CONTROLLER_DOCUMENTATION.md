@@ -171,7 +171,7 @@ with StepperController(address=0) as motor:
 Create a new stepper controller instance.
 
 **Parameters:**
-- `address` (int or str): Low 4-bit I2C address offset (0-15 or "0000"-"1111" binary). Final I2C address = base (0x20) + offset
+- `address` (int or str): Low 4-bit I2C address offset (0-15 or "0000"-"1111" binary). Final I2C address = base (0x20) (module address) + offset
 - `bus` (int, optional): I2C bus number. Default: 1
 - `steps_per_rev` (int, optional): Motor steps per full revolution. (can be set by flipping switches on driver module) Default: 200
 - `i2c_retry_count` (int, optional): Number of retry attempts for transient I2C errors. Default: 3
@@ -471,6 +471,7 @@ with StepperController(address=0) as motor:
 ## Constants
 
 Constants are defined in `stepper_i2c/constants.py`:
+You are not supposed to change these but you can if you really want to.
 
 ```python
 BASE_I2C_ADDRESS = 0x20  # Base I2C address
@@ -550,7 +551,3 @@ Adjust speed using `set_speed_percent()` or `set_speed_rpm()`. Note that very hi
 If `wait_until_complete()` times out, increase the timeout value or check if the motor is mechanically stuck.
 
 ---
-
-## License
-
-See repository LICENSE file.
