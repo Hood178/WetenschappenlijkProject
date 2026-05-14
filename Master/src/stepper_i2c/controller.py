@@ -318,6 +318,7 @@ class StepperController:
         self.set_direction(clockwise)
         self._set_period_us(self._speed_percent_to_period_us(speed_percent))
         self._set_step_count(steps)
+        print("steps:"+str(steps))
         self.enable(True)
 
     def move_degrees(self, degrees: float, speed_percent: float = 50.0, clockwise: bool = True) -> None:
@@ -438,7 +439,7 @@ class StepperController:
         while time.time() - start < timeout_sec:
             if not self.is_moving():
                 consecutive_complete_reads += 1
-                if consecutive_complete_reads >= 3:
+                if consecutive_complete_reads >= 2:
                     return True
             else:
                 consecutive_complete_reads = 0

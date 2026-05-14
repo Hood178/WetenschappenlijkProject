@@ -274,13 +274,13 @@ void setup() {
   stopMotionInternal(true);
 
   const uint8_t lowNibble = readDipAddressLowNibble();
-  uint8_t slaveAddress = 0x02 | (lowNibble & 0x0F);
+  uint8_t slaveAddress = 0x20 | (lowNibble & 0x0F);
 
-  Serial.begin(115200);
-  delay(2000);
-  Serial.print(F("I2C address: 0x"));
-  if (slaveAddress < 0x10) Serial.print('0');
-  Serial.println(slaveAddress, HEX);
+  // Serial.begin(115200);
+  // delay(2000);
+  // Serial.print(F("I2C address: 0x"));
+  // if (slaveAddress < 0x10) Serial.print('0');
+  // Serial.println(slaveAddress, HEX);
 
   Wire.begin(slaveAddress);
   Wire.onReceive(onReceive);

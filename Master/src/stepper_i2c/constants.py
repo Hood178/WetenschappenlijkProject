@@ -1,5 +1,5 @@
 """"Constants for the stepper motor I2C controller."""
-BASE_I2C_ADDRESS = 0b010 << 4
+BASE_I2C_ADDRESS = 0x20
 I2C_BUS = 1
 
 """Stepper motor parameters"""
