@@ -173,7 +173,7 @@ Create a new stepper controller instance.
 **Parameters:**
 - `address` (int or str): Low 4-bit I2C address offset (0-15 or "0000"-"1111" binary). Final I2C address = base (0x20) + offset
 - `bus` (int, optional): I2C bus number. Default: 1
-- `steps_per_rev` (int, optional): Motor steps per full revolution. Default: 200
+- `steps_per_rev` (int, optional): Motor steps per full revolution. (can be set by flipping switches on driver module) Default: 200
 - `i2c_retry_count` (int, optional): Number of retry attempts for transient I2C errors. Default: 3
 - `i2c_retry_delay` (float, optional): Initial delay in seconds before retrying. Default: 0.05
 - `i2c_retry_backoff` (float, optional): Multiplier for exponential backoff between retries. Default: 2.0
