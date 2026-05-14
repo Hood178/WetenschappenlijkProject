@@ -289,14 +289,6 @@ class StepperController:
     def stop(self) -> None:
         """Stop the motor by disabling the driver output."""
         self.enable(False)
-
-    def lock(self) -> None:
-        """Hold the motor in place by keeping the driver enabled with no pulses."""
-        self._write_8(const.REG_LOCK, 0x01)
-
-    def hold(self) -> None:
-        """Alias for lock()."""
-        self.lock()
     
     def move_steps(self, steps: int, speed_percent: float = 50.0, clockwise: bool = True) -> None:
         """Execute a finite move by a number of steps.

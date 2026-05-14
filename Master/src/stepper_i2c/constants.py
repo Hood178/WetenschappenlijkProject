@@ -15,4 +15,3 @@ REG_PERIOD_US_L      = 0x03  # 2 bytes: step period in microseconds (big-endian)
 REG_PCOUNT_H         = 0x04  # 2 bytes: pulse count (big-endian)
 REG_PCOUNT_L         = 0x05  # 2 bytes: pulse count (big-endian)
 MOTION_COMPLETE_FLAG = 0x06  # 1 byte: 0=not complete, 1=complete
-REG_LOCK             = 0x07  # 1 byte: 1=enable driver and stop pulsing (hold)

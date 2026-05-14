@@ -64,7 +64,6 @@ const uint8_t REG_PERIOD_US_L           = 0x03;
 const uint8_t REG_PCOUNT_H              = 0x04;
 const uint8_t REG_PCOUNT_L             = 0x05;
 const uint8_t REG_MOTION_COMPLETE_FLAG  = 0x06;
-const uint8_t REG_LOCK                  = 0x07;
 
 // ─── Register state ────────────────────────────────────────────────────────
 volatile uint8_t  currentRegister      = REG_ENABLE;
@@ -208,15 +207,6 @@ void onReceive(int numBytes) {
 
     case REG_MOTION_COMPLETE_FLAG:
       // read-only, schrijf wordt genegeerd
-      break;
-
-    case REG_LOCK:
-      if (receivedValue != 0) {
-        regEnable          = true;
-        motionStartPending = false;
-        stopMotionRequest  = true;
-        regMotionComplete  = true;
-      }
       break;
 
     default:
