@@ -26,14 +26,14 @@ A complete stepper motor control system consisting of:
 │        - DIP-switch address configuration                   │
 └────┬────────────────────────────────────────┬───────────────┘
      │ GPIO Pins                              │ I2C
-     ├─ Pin 7 (EN)  ────→ DM320T ENABLE       ├─ SDA (pin 18)
-     ├─ Pin 8 (DIR) ────→ DM320T DIRECTION    └─ SCL (pin 19)
-     └─ Pin 9 (PUL) ────→ DM320T PULSE
+    ├─ Pin 7 (EN)  ────→ TB6600 ENABLE       ├─ SDA (pin 18)
+    ├─ Pin 8 (DIR) ────→ TB6600 DIRECTION    └─ SCL (pin 19)
+    └─ Pin 9 (PUL) ────→ TB6600 PULSE
              ↓
     ┌────────────────────┐
     │  TB6600 Stepper    │
     │ Motor Driver       │
-    │ (with A4988-like   │
+    │ (step/direction    │
     │  interface)        │
     └────────────────────┘
              ↓
@@ -58,7 +58,7 @@ A complete stepper motor control system consisting of:
 
 #### Wiring
 
-| Signal | Arduino Pin | DM320T Pin | Purpose |
+| Signal | Arduino Pin | TB6600 Pin | Purpose |
 |--------|-------------|-----------|---------|
 | **PUL** | 9 | STEP | Pulse signal (rising edge = one step) |
 | **DIR** | 8 | DIR | Direction control (HIGH=forward, LOW=reverse) |
@@ -68,6 +68,8 @@ A complete stepper motor control system consisting of:
 | **GND** | GND | GND | Common ground |
 | **5V** | 5V | Logic VCC | Arduino 5V logic supply |
 | – | VMOT | VMOT | Motor power supply (separate 12-24V) |
+
+I2C uses two shared lines, SDA and SCL. These lines need pull-up resistors so they stay HIGH when no device is pulling them LOW. A pull-up resistor is just a small resistor that helps keep the signal in the correct state. If your board or module does not already include them, add external pull-ups of about 2.2k-10kΩ on both SDA and SCL.
 
 #### I2C Address Configuration (DIP Switches)
 
@@ -92,7 +94,7 @@ The Arduino's I2C slave address is configured via 4 DIP switches on Arduino pins
 
 1. Install [Arduino IDE](https://www.arduino.cc/en/software)
 2. Open `Slave/StepperMotorController/StepperMotorController.ino`
-3. Select Board: **Arduino Nano r4**
+3. Select Board: **Arduino Nano R4**
 4. Select Port
 5. Click **Upload**
 
@@ -171,7 +173,7 @@ For detailed API documentation and more usage patterns, see [Master/CONTROLLER_D
 
 ### Arduino Won't Upload
 - Check USB cable (data cable, not power-only)
-- Verify correct board selected: **Arduino Nano 33 IoT** or **Arduino Nano 4 Wifi**
+- Verify correct board selected: **Arduino Nano R4**
 - Try different USB port
 - Update Arduino IDE bootloader
 
@@ -182,7 +184,7 @@ i2cdetect -y 1
 
 # If not visible:
 # 1. Verify SDA/SCL wiring (pins 18/19 on Nano R4)
-# 2. Check pull-up resistors (typically 2.2kΩ required)
+# 2. Check that pull-up resistors are present on SDA and SCL
 # 3. Verify DIP switch setting matches your slave address
 ```
 
