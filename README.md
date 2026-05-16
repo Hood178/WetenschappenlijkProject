@@ -3,7 +3,7 @@
 ## Overview
 
 A complete stepper motor control system consisting of:
-- **Arduino Nano R4 Slave** (`Slave/`): I2C slave microcontroller that directly controls a DM320T stepper motor driver via PWM and GPIO
+- **Arduino Nano R4 Slave** (`Slave/`): I2C slave microcontroller that directly controls a TB6600 stepper motor driver via PWM and GPIO
 - **Python Master Controller** (`Master/`): High-level Python API for remote motor control via I2C from Raspberry Pi or Linux computer
 
 ### Architecture
@@ -31,7 +31,7 @@ A complete stepper motor control system consisting of:
      └─ Pin 9 (PUL) ────→ DM320T PULSE
              ↓
     ┌────────────────────┐
-    │  DM320T Stepper    │
+    │  TB6600 Stepper    │
     │ Motor Driver       │
     │ (with A4988-like   │
     │  interface)        │
