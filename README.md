@@ -50,8 +50,8 @@ A complete stepper motor control system consisting of:
 ### 1. Arduino Setup (Slave)
 
 #### Hardware Requirements
-- Arduino Nano R4 Wifi
-- DM320T Stepper Driver (or compatible A4988/DRV8825)
+- Arduino Nano R4
+- TB6600 Stepper Driver
 - Stepper Motor (e.g., NEMA17 with 200 steps/rev)
 - 4x DIP Switches (for I2C address configuration)
 - Breadboard & jumper wires
@@ -73,12 +73,12 @@ A complete stepper motor control system consisting of:
 
 The Arduino's I2C slave address is configured via 4 DIP switches on Arduino pins 2, 3, 4, 5:
 
-| DIP | Pin | Binary Pos | When OFF | When ON |
-|-----|-----|-----------|----------|---------|
-| S0 | 5 | bit 0 | → address bit 0 | → address bit 0 |
-| S1 | 4 | bit 1 | → address bit 1 | → address bit 1 |
-| S2 | 3 | bit 2 | → address bit 2 | → address bit 2 |
-| S3 | 2 | bit 3 | → address bit 3 | → address bit 3 |
+| DIP | Pin | Binary Pos |
+|-----|-----|-----------|
+| S0 | 5 | bit 0 |
+| S1 | 4 | bit 1 |
+| S2 | 3 | bit 2 |
+| S3 | 2 | bit 3 |
 
 **Final I2C Address = 0x20 + (DIP nibble value)**
 
@@ -92,8 +92,8 @@ The Arduino's I2C slave address is configured via 4 DIP switches on Arduino pins
 
 1. Install [Arduino IDE](https://www.arduino.cc/en/software)
 2. Open `Slave/StepperMotorController/StepperMotorController.ino`
-3. Select Board: **Arduino Nano 33 IoT** (or appropriate R4 variant)
-4. Select Port: `/dev/ttyUSB0` or `/dev/ttyACM0` (Linux) or `COM3` (Windows)
+3. Select Board: **Arduino Nano r4**
+4. Select Port
 5. Click **Upload**
 
 ---
