@@ -1,271 +1,297 @@
-# WetenschappenlijkProject - Stepper Motor Controller
+# WetenschappenlijkProject - Steppermotorcontroller
 
-## Overview
+## Overzicht
 
-A complete stepper motor control system consisting of:
-- **Arduino Nano R4 Slave** (`Slave/`): I2C slave microcontroller that directly controls a TB6600 stepper motor driver via PWM and GPIO
-- **Python Master Controller** (`Master/`): High-level Python API for remote motor control via I2C from Raspberry Pi or Linux computer
+Een compleet regelsysteem voor een steppermotor, bestaande uit:
+- **Arduino Nano R4-slave** (`Slave/`): I2C-slavemicrocontroller die rechtstreeks een TB6600 steppermotordriver aanstuurt via PWM en GPIO
+- **Python-mastercontroller** (`Master/`): Python-API op hoog niveau voor bediening op afstand via I2C vanaf een Raspberry Pi of Linux-computer
 
-### Architecture
+### Architectuur
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Master (Python)                          │
-│                   - High-level API                          │
-│               - Motor control commands                      │
-│                - Error handling & retry                     │
+│                   - API op hoog niveau                      │
+│               - Motorbesturingsopdrachten                   │
+│                - Foutafhandeling & opnieuw proberen         │
 └────────────┬────────────────────────────────────────────────┘
-             │ I2C Bus (SMBus) - 400 kHz
-             │ SDA (GPIO 2) / SCL (GPIO 3) on RPi
+             │ I2C-bus (SMBus) - 400 kHz
+             │ SDA (GPIO 2) / SCL (GPIO 3) op de RPi
              ↓
 ┌─────────────────────────────────────────────────────────────┐
-│              Arduino Nano R4 (Slave)                        │
-│        - I2C register interface (0x20-0x2F)                 │
-│        - Motion state machine                               │
-│        - Hardware PWM pulse generation                      │
-│        - DIP-switch address configuration                   │
+│              Arduino Nano R4 (slave)                        │
+│        - I2C-registerinterface (0x20-0x2F)                  │
+│        - Bewegings-toestandsmachine                         │
+│        - Hardwarematige PWM-pulsopwekking                   │
+│        - Adresconfiguratie via DIP-schakelaars              │
 └────┬────────────────────────────────────────┬───────────────┘
-     │ GPIO Pins                              │ I2C
-    ├─ Pin 7 (EN)  ────→ TB6600 ENABLE       ├─ SDA (pin 18)
-    ├─ Pin 8 (DIR) ────→ TB6600 DIRECTION    └─ SCL (pin 19)
-    └─ Pin 9 (PUL) ────→ TB6600 PULSE
+     │ GPIO-pinnen                            │ I2C
+     ├─ Pin 7 (EN)  ────→ TB6600 ENABLE       ├─ SDA (pin 18)
+     ├─ Pin 8 (DIR) ────→ TB6600 DIRECTION    └─ SCL (pin 19)
+     └─ Pin 9 (PUL) ────→ TB6600 PULSE
              ↓
     ┌────────────────────┐
-    │  TB6600 Stepper    │
-    │ Motor Driver       │
+    │ TB6600-steppermotor│
+    │ driver             │
     │ (step/direction    │
     │  interface)        │
     └────────────────────┘
              ↓
     ┌────────────────────┐
-    │  Stepper Motor     │
-    │  (NEMA17, etc.)    │
+    │  Steppermotor      │
+    │  (NEMA17, enz.)    │
     └────────────────────┘
 ```
 
 ---
 
-## Quick Start
+## Snel aan de slag
 
-### 1. Arduino Setup (Slave)
+### 1. Arduino-instelling (slave)
 
-#### Hardware Requirements
+#### Benodigdheden
 - Arduino Nano R4
-- TB6600 Stepper Driver
-- Stepper Motor (e.g., NEMA17 with 200 steps/rev)
-- 4x DIP Switches (for I2C address configuration)
-- Breadboard & jumper wires
+- TB6600 steppermotordriver
+- Steppermotor (bijvoorbeeld NEMA17 met 200 stappen/omwenteling)
+- 4x DIP-schakelaars (voor I2C-adresconfiguratie)
+- Breadboard en jumperdraden
 
-#### Wiring
+#### Bedrading
 
-| Signal | Arduino Pin | TB6600 Pin | Purpose |
+| Signaal | Arduino-pin | TB6600-pin | Doel |
 |--------|-------------|-----------|---------|
-| **PUL** | 9 | STEP | Pulse signal (rising edge = one step) |
-| **DIR** | 8 | DIR | Direction control (HIGH=forward, LOW=reverse) |
-| **EN** | 7 | ENABLE | Enable driver (HIGH=enabled, LOW=disabled) |
-| **SDA** | 18 | – | I2C data line |
-| **SCL** | 19 | – | I2C clock line |
-| **GND** | GND | GND | Common ground |
-| **5V** | 5V | Logic VCC | Arduino 5V logic supply |
-| – | VMOT | VMOT | Motor power supply (separate 12-24V) |
+| **PUL** | 9 | STEP | Pulssignaal (stijgende flank = een stap) |
+| **DIR** | 8 | DIR | Richtingsregeling (HIGH=vooruit, LOW=achteruit) |
+| **EN** | 7 | ENABLE | Driver inschakelen (HIGH=ingeschakeld, LOW=uitgeschakeld) |
+| **SDA** | 18 | - | I2C-datalijn |
+| **SCL** | 19 | - | I2C-kloklijn |
+| **GND** | GND | GND | Gemeenschappelijke massa |
+| **5V** | 5V | Logic VCC | Arduino 5V-logicaspanning |
+| - | VMOT | VMOT | Motorspanning (aparte 12-24V) |
 
-I2C uses two shared lines, SDA and SCL. These lines need pull-up resistors so they stay HIGH when no device is pulling them LOW. A pull-up resistor is just a small resistor that helps keep the signal in the correct state. If your board or module does not already include them, add external pull-ups of about 2.2k-10kΩ on both SDA and SCL.
+I2C gebruikt twee gedeelde lijnen, SDA en SCL. Deze lijnen hebben pull-upweerstanden nodig zodat ze HIGH blijven wanneer geen enkel apparaat ze LOW trekt. Een pull-upweerstand is een kleine weerstand die het signaal in de juiste toestand houdt. Als jouw bord of module die niet al ingebouwd heeft, plaats dan externe pull-ups van ongeveer 2,2k-10k ohm op zowel SDA als SCL.
 
-#### I2C Address Configuration (DIP Switches)
+#### I2C-adresconfiguratie (DIP-schakelaars)
 
-The Arduino's I2C slave address is configured via 4 DIP switches on Arduino pins 2, 3, 4, 5:
+Het I2C-slaveadres van de Arduino wordt ingesteld met 4 DIP-schakelaars op Arduino-pinnen 2, 3, 4 en 5:
 
-| DIP | Pin | Binary Pos |
-|-----|-----|-----------|
-| S0 | 5 | bit 0 |
-| S1 | 4 | bit 1 |
-| S2 | 3 | bit 2 |
-| S3 | 2 | bit 3 |
+| DIP | Pin | Binaire positie | Wanneer OFF | Wanneer ON |
+|-----|-----|-----------------|------------|-----------|
+| S0 | 5 | bit 0 | -> adresbit 0 | -> adresbit 0 |
+| S1 | 4 | bit 1 | -> adresbit 1 | -> adresbit 1 |
+| S2 | 3 | bit 2 | -> adresbit 2 | -> adresbit 2 |
+| S3 | 2 | bit 3 | -> adresbit 3 | -> adresbit 3 |
 
-**Final I2C Address = 0x20 + (DIP nibble value)**
+**Eindadres I2C = 0x20 + (waarde van de DIP-nibble)**
 
-**Common Configurations:**
-- All OFF (0000): **0x20**
-- Bit 3 ON (1000): **0x28** 
+**Veelvoorkomende configuraties:**
+- Alles OFF (0000): **0x20**
+- Bit 3 ON (1000): **0x28**
 - Bit 0 ON (0001): **0x21**
-- All ON (1111): **0x2F**
+- Alles ON (1111): **0x2F**
 
-#### Upload Arduino Sketch
+#### Arduino-sketch uploaden
 
-1. Install [Arduino IDE](https://www.arduino.cc/en/software)
+1. Installeer [Arduino IDE](https://www.arduino.cc/en/software)
 2. Open `Slave/StepperMotorController/StepperMotorController.ino`
-3. Select Board: **Arduino Nano R4**
-4. Select Port
-5. Click **Upload**
+3. Kies bord: **Arduino Nano R4**
+4. Kies de poort
+5. Klik op **Upload**
 
 ---
 
-### 2. Python Setup (Master)
+### 2. Python-instelling (master)
 
-#### Installation
+#### Installatie
 
 ```bash
-# Install Python dependencies
+# Python-afhankelijkheden installeren
 cd Master
 pip install smbus2
 
-# Optional: For development
+# Optioneel: voor ontwikkeling
 pip install -e src/
 ```
 
-#### Verify I2C Connection
+#### I2C-verbinding controleren
 
 ```bash
-# List connected I2C devices
+# Aangesloten I2C-apparaten tonen
 i2cdetect -y 1
-
-# Expected output: Your Arduino address (e.g., 0x20, 0x28)
 ```
 
-#### Quick Test
+**Voorbeeld van verwachte uitvoer (Arduino op adres 0x20):**
+```
+   0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:                         -- -- -- -- -- -- -- --
+10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+20: 20 -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+70: -- -- -- -- -- --
+```
+
+Als je Arduino hier staat (in dit geval op `20`), betekent dit dat de I2C-verbinding goed werkt.
+
+#### Snelle test
 
 ```python
 from src.stepper_i2c import StepperController
 
-# Create controller (address depends on DIP switch configuration)
+# Controller aanmaken (adres hangt af van de DIP-schakelaarconfiguratie)
 with StepperController(address=0, bus=1) as motor:
-    print("Motor State:", motor.get_state())
-    
-    # Move 100 steps at 50% speed
+    print("Motorstatus:", motor.get_state())
+
+    # 100 stappen verplaatsen op 50% snelheid
     motor.move_steps(100, speed_percent=50.0, clockwise=True)
     motor.wait_until_complete(timeout_sec=10)
-    
-    print("Done!")
+
+    print("Klaar!")
 ```
 
-## Python API Usage
+## Gebruik van de Python-API
 
-### Basic Control
+### Basisbediening
 
 ```python
 from src.stepper_i2c import StepperController
 
 with StepperController(address=0, bus=1) as motor:
-    # Get current state
+    # Huidige toestand ophalen
     state = motor.get_state()
-    print(f"Speed: {state['speed_percent']}%")
-    print(f"Moving: {state['enabled'] and not state.get('is_complete', True)}")
-    
-    # Control motor
+    print(f"Snelheid: {state['speed_percent']}%")
+    print(f"Beweegt: {state['enabled'] and not state.get('is_complete', True)}")
+
+    # Motor bedienen
     motor.set_direction(clockwise=True)
     motor.set_speed_percent(75.0)
     motor.enable(True)
-    
-    # Stop
+
+    # Stoppen
     motor.stop()
 ```
 
-### Examples
+### Voorbeelden
 
-See the complete example in `Master/`:
-- **draw_robot.py** – Multi-axis drawing application with two motors running in parallel
+Zie het volledige voorbeeld in `Master/`:
+- **draw_robot.py** – Tekentoepassing met meerdere assen en twee motoren die parallel draaien
 
-For detailed API documentation and more usage patterns, see [Master/CONTROLLER_DOCUMENTATION.md](Master/CONTROLLER_DOCUMENTATION.md).
+Voor gedetailleerde API-documentatie en meer gebruikspatronen, zie [Master/CONTROLLER_DOCUMENTATION.md](Master/CONTROLLER_DOCUMENTATION.md).
 
 ---
 
-## Troubleshooting
+## Problemen oplossen
 
-### Arduino Won't Upload
-- Check USB cable (data cable, not power-only)
-- Verify correct board selected: **Arduino Nano R4**
-- Try different USB port
-- Update Arduino IDE bootloader
+### Arduino wil niet uploaden
+- Controleer de USB-kabel (een datakabel, geen alleen-voedingskabel)
+- Controleer of het juiste bord is gekozen: **Arduino Nano R4**
+- Probeer een andere USB-poort
+- Werk de Arduino IDE-bootloader bij
 
-### I2C Not Detected
+### I2C niet gedetecteerd
 ```bash
-# Check if Arduino is visible
+# Controleer of de Arduino zichtbaar is
 i2cdetect -y 1
-
-# If not visible:
-# 1. Verify SDA/SCL wiring (pins 18/19 on Nano R4)
-# 2. Check that pull-up resistors are present on SDA and SCL
-# 3. Verify DIP switch setting matches your slave address
 ```
 
-### Motor Not Moving
-1. **Check DIP switches** – Verify address matches Python code
-2. **Verify hardware wiring** – EN, DIR, PUL pins connected
-3. **Test with Python**:
+**Voorbeeld van een lege output (Arduino niet gevonden):**
+```
+   0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:                         -- -- -- -- -- -- -- --
+10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+70: -- -- -- -- -- -- -- --
+```
+
+**Als dit gebeurt, probeer dan:**
+1. Controleer de bedrading van SDA/SCL (pinnen 18/19 op de Nano R4)
+2. Controleer of er pull-upweerstanden aanwezig zijn op SDA en SCL
+3. Controleer of de DIP-schakelaarinstelling overeenkomt met jouw slaveadres
+
+### Motor beweegt niet
+1. **Controleer de DIP-schakelaars** - Controleer of het adres overeenkomt met de Python-code
+2. **Controleer de bedrading** - EN-, DIR- en PUL-pinnen aangesloten
+3. **Test met Python**:
    ```python
-   motor.get_state()  # Check if slave responds
-   motor.enable(True)  # Try enabling
+   motor.get_state()  # Controleren of de slave reageert
+   motor.enable(True)  # Proberen in te schakelen
    ```
-4. **Check period value** – Must be between 1000-65535 µs (controlled by Arduino)
-5. **Verify motor supply voltage** – VMOT should be 12-24V (depends on driver)
+4. **Controleer de periodewaarde** - Moet tussen 1000-65535 µs liggen (door de Arduino geregeld)
+5. **Controleer de motorspanning** - VMOT moet 12-24V zijn (hangt af van de driver)
 
-### Intermittent I2C Errors
-- Add 100nF capacitors near Arduino 5V and GND
-- Reduce I2C cable length or shield cables
-- Use pull-up resistors on SDA/SCL (2.2k-10k)
-- Enable I2C retry in Python: `i2c_retry_count=5`
+### Af en toe I2C-fouten
+- Plaats 100nF-condensatoren dicht bij Arduino 5V en GND
+- Maak de I2C-kabel korter of gebruik afgeschermde kabels
+- Gebruik pull-upweerstanden op SDA/SCL (2,2k-10k)
+- Zet I2C-herhalen aan in Python: `i2c_retry_count=5`
 
-### Motion Too Fast/Slow
-- Use Python API: `motor.set_speed_percent(50.0)` for direct control
-- Speed range: 0% (slowest) to 100% (fastest)
-- Minimum practical period: 1000 µs (Arduino enforces minimum 20 µs)
+### Beweging te snel/te langzaam
+- Gebruik de Python-API: `motor.set_speed_percent(50.0)` voor directe bediening
+- Snelheidsbereik: 0% (traagst) tot 100% (snelst)
+- Minimale praktische periode: 1000 µs (Arduino handhaaft een minimum van 20 µs)
 
 ---
 
-## Project Structure
+## Projectstructuur
 
 ```
 stepper-motor/
-├── README.md                              # This file
+├── README.md                              # Dit bestand
 ├── Master/
-│   ├── CONTROLLER_DOCUMENTATION.md        # Complete Python API reference
-│   ├── draw_robot.py                      # Multi-axis drawing example
+│   ├── CONTROLLER_DOCUMENTATION.md        # Volledige Python API-referentie
+│   ├── draw_robot.py                      # Voorbeeld voor tekenen met meerdere assen
 │   └── src/stepper_i2c/
-│       ├── __init__.py                    # Package init
-│       ├── controller.py                  # Main StepperController class
-│       └── constants.py                   # I2C register definitions
+│       ├── __init__.py                    # Pakketinitialisatie
+│       ├── controller.py                  # Hoofdklasse StepperController
+│       └── constants.py                   # I2C-registerdefinities
 └── Slave/
     └── StepperMotorController/
-        └── StepperMotorController.ino     # Arduino sketch (I2C slave)
+        └── StepperMotorController.ino     # Arduino-sketch (I2C-slave)
 ```
 
 ---
 
-## Key Features
+## Belangrijkste functies
 
-✅ **Arduino Slave:**
-- I2C register-based interface
-- DIP-configurable slave address (0x20-0x2F)
-- Hardware PWM pulse generation
-- Motion state machine (continuous/finite modes)
-- Robust I2C communication with timeout
+✅ **Arduino-slave:**
+- I2C-interface op basis van registers
+- Slaveadres instelbaar met DIP (0x20-0x2F)
+- Hardwarematige PWM-pulsopwekking
+- Bewegings-toestandsmachine (continu/finit)
+- Robuuste I2C-communicatie met timeout
 
-✅ **Python Master:**
-- High-level API for motor control
-- Speed control in % or RPM
-- Relative motion (steps, degrees, revolutions)
-- I2C error retry with exponential backoff
-- Context manager for resource management
-- Motion completion detection
-
----
-
-## Specifications
-
-| Parameter | Value | Notes |
-|-----------|-------|-------|
-| I2C Bus Speed | 400 kHz | Standard SMBus speed |
-| I2C Address Range | 0x20–0x2F | 16 possible addresses via DIP |
-| Step Period Range | 20–65535 µs | Arduino: min 20 µs, Python: min 1000 µs |
-| Pulse Count | 0–65535 | 0 = continuous, >0 = finite move |
-| Motion Completion Check | Polling | Read REG_MOTION_COMPLETE_FLAG |
-| Max Simultaneous Motors | 16 | Limited by I2C addresses (one per master) |
+✅ **Python-master:**
+- API op hoog niveau voor motorbediening
+- Snelheidsregeling in % of RPM
+- Relatieve beweging (stappen, graden, omwentelingen)
+- I2C-foutpogingen met exponentiële vertraging
+- Contextmanager voor beheer van bronnen
+- Detectie van beweging voltooid
 
 ---
 
-## Notes
+## Specificaties
 
-- **No position tracking** – All motion is relative
-- **I2C timeout** – Arduino has 25ms timeout on I2C; if master stalls, Arduino resets
-- **Step period minimum** – Arduino enforces minimum 20 µs period (Python default 1000 µs for stability)
-- **Separate power supplies recommended** – Motor supply (12-24V) separate from logic (5V)
+| Parameter | Waarde | Opmerking |
+|-----------|--------|-----------|
+| I2C-bussnelheid | 400 kHz | Standaard SMBus-snelheid |
+| I2C-adresbereik | 0x20-0x2F | 16 mogelijke adressen via DIP |
+| Stappenperiodebereik | 20-65535 µs | Arduino: min. 20 µs, Python: min. 1000 µs |
+| Pulstelling | 0-65535 | 0 = continu, >0 = finite beweging |
+| Controle van beweging voltooid | Polling | Lees REG_MOTION_COMPLETE_FLAG |
+| Maximaal aantal gelijktijdige motoren | 16 | Beperkt door I2C-adressen (een per master) |
+
+---
+
+## Opmerkingen
+
+- **Geen positietracking** - Alle bewegingen zijn relatief
+- **I2C-timeout** - De Arduino heeft een I2C-timeout van 25 ms; als de master vastloopt, reset de Arduino
+- **Minimum stappenperiode** - De Arduino handhaaft een minimum van 20 µs (Python gebruikt standaard 1000 µs voor stabiliteit)
+- **Aparte voedingen aanbevolen** - Motorspanning (12-24V) apart van logicaspanning (5V)

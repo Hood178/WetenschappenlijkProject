@@ -1,207 +1,209 @@
-# StepperController Documentation
+# StepperController-documentatie
 
-## Overview
+## Overzicht
 
-`StepperController` is a high-level Python I2C master interface for controlling a DM320T stepper motor driver connected to an Arduino Nano R4 slave device. It provides an easy-to-use API for motor control while handling the low-level I2C register communication automatically.
+`StepperController` is een eenvoudige Python-API die aan een Arduino Nano R4 vertelt hoe een TB6600 steppermotordriver moet worden aangestuurd. Je gebruikt deze om de motor te laten draaien, stoppen, van richting te laten veranderen en een gekozen aantal stappen te laten zetten, zonder dat je zelf met de lage-niveau I2C-details bezig hoeft te zijn.
 
-**Key Features:**
-- Remote motor control via I2C protocol
-- Speed control in percentage or RPM
-- Relative motion control (steps, degrees, revolutions)
-- Continuous and finite motion modes
-- Motion state monitoring
-- Context manager support for automatic resource cleanup
+In simpele woorden: Python stuurt opdrachten naar de Arduino, de Arduino stuurt pulssignalen naar de TB6600 en de TB6600 drijft daarna de steppermotor aan.
+
+**Belangrijkste functies:**
+- Motor op afstand bedienen via I2C
+- Snelheid instellen in procenten of RPM
+- Beweging instellen in stappen, graden of omwentelingen
+- Continu laten draaien of voor een vast aantal stappen
+- Controleren of de motor nog beweegt
+- Automatisch en veilig afsluiten wanneer je `with` gebruikt
 
 ---
 
-## Architecture
+## Architectuur
 
-### Communication Model
+### Communicatiemodel
 
-The controller communicates with an Arduino slave over I2C using a register-based interface. The slave device maintains the state of the motor (enabled/disabled, direction, speed, pulse count) and handles the hardware timing for pulse generation.
+De controller communiceert met een Arduino-slave via I2C met een registergebaseerde interface. Het slave-apparaat bewaart de toestand van de motor (ingeschakeld/uitgeschakeld, richting, snelheid, pulstelling) en verzorgt de timing voor het genereren van pulsen.
 
 ```
-  Master (Python)                   I2C Bus                  Slave (Arduino)
+  Master (Python)                   I2C-bus                  Slave (Arduino)
 ┌──────────────────┐           ┌──────────────┐           ┌──────────────────┐
-│ StepperController├───────────┤ I2C Bus (SMB)├───────────┤ Arduino DM320T   │
-│                  │           │              │           │ Controller       │
-│ - High-level API │           │ Register Map │           │ - Hardware timing│
-│ - I2C commands   │           │              │           │ - Pin control    │
+│ StepperController├───────────┤  I2C-bus     ├───────────┤ Arduino Nano R4  │
+│                  │           │              │           │ + TB6600-driver  │
+│ - API op hoog    │           │ Registermap  │           │ - Pulssignalen   │
+│   niveau         │           │              │           │ - Pinbediening   │
 └──────────────────┘           └──────────────┘           └──────────────────┘
 ```
 
-### Register Map
+### Registermap
 
-The slave device exposes the following I2C registers:
+Het slave-apparaat biedt de volgende I2C-registers aan:
 
-| Address | Name | Type | Size | Purpose |
-|---------|------|------|------|---------|
-| 0x00 | REG_ENABLE | R/W | 1 byte | Enable/disable driver (`0x00`=disabled, `0x01`=enabled + start motion) |
-| 0x01 | REG_DIRECTION | R/W | 1 byte | Motor direction (`0x00`=forward, `0x01`=reverse) |
-| 0x02 | REG_PERIOD_US_H | R/W | 1 byte | Step period high byte (part of 16-bit big-endian value) |
-| 0x03 | REG_PERIOD_US_L | R/W | 1 byte | Step period low byte (combined: period = (H << 8) \| L, in µs) |
-| 0x04 | REG_PCOUNT_H | R/W | 1 byte | Pulse count high byte (part of 16-bit big-endian value) |
-| 0x05 | REG_PCOUNT_L | R/W | 1 byte | Pulse count low byte (combined: count = (H << 8) \| L) |
-| 0x06 | MOTION_COMPLETE_FLAG | R | 1 byte | Motion status (`0x00`=moving, `0x01`=complete/idle) |
+| Adres | Naam | Type | Grootte | Doel |
+|-------|------|------|---------|------|
+| 0x00 | REG_ENABLE | R/W | 1 byte | Driver in- of uitschakelen (`0x00`=uitgeschakeld, `0x01`=ingeschakeld + beweging starten) |
+| 0x01 | REG_DIRECTION | R/W | 1 byte | Richting van de motor (`0x00`=vooruit, `0x01`=achteruit) |
+| 0x02 | REG_PERIOD_US_H | R/W | 1 byte | Hoogste byte van de stapperiode (deel van 16-bit big-endian waarde) |
+| 0x03 | REG_PERIOD_US_L | R/W | 1 byte | Laagste byte van de stapperiode (gecombineerd: periode = (H << 8) | L, in µs) |
+| 0x04 | REG_PCOUNT_H | R/W | 1 byte | Hoogste byte van de pulstelling (deel van 16-bit big-endian waarde) |
+| 0x05 | REG_PCOUNT_L | R/W | 1 byte | Laagste byte van de pulstelling (gecombineerd: telling = (H << 8) | L) |
+| 0x06 | MOTION_COMPLETE_FLAG | R | 1 byte | Bewegingsstatus (`0x00`=bezig, `0x01`=klaar/inactief) |
 
-**Motion Modes:**
-- **Continuous:** Set `REG_PCOUNT` to 0; motor runs indefinitely until disabled
-- **Finite:** Set `REG_PCOUNT` to desired count; motor stops after that many pulses
+**Bewegingsmodi:**
+- **Continu:** zet `REG_PCOUNT` op 0; de motor draait oneindig door totdat hij wordt uitgeschakeld
+- **Finit:** zet `REG_PCOUNT` op de gewenste telling; de motor stopt na dat aantal pulsen
 
 ---
 
-## Usage Examples
+## Gebruiksvoorbeelden
 
-### Basic Setup
+### Basisinstelling
 
 ```python
 from stepper_i2c.controller import StepperController
 
-# Create controller for slave at address 0x08 (base + offset 0)
+# Controller maken voor slave-adres 0x08 (basis + offset 0)
 controller = StepperController(address=0, bus=1)
 
 try:
-    # Your control code here
+    # Hier komt jouw besturingscode
     pass
 finally:
     controller.close()
 ```
 
-### Using Context Manager (Recommended)
+### Met contextmanager gebruiken (aanbevolen)
 
 ```python
 from stepper_i2c.controller import StepperController
 
-# Automatically closes connection on exit
+# Sluit de verbinding automatisch af bij het verlaten van het blok
 with StepperController(address=0) as motor:
-    motor.start()  # Run continuously at 50% speed, clockwise
-    motor.stop()   # Disable the motor
+    motor.start()  # Blijf draaien op 50% snelheid, met de klok mee
+    motor.stop()   # Zet de motor uit
 ```
 
-### Speed Control
+### Snelheidsregeling
 
 ```python
 with StepperController(address=0) as motor:
-    # Set speed as percentage (0-100)
-    motor.set_speed_percent(75.0)  # 75% of maximum speed
+    # Snelheid instellen als percentage (0-100)
+    motor.set_speed_percent(75.0)  # 75% van de maximale snelheid
     
-    # Set speed in RPM
-    motor.set_speed_rpm(300)  # 300 revolutions per minute
+    # Snelheid instellen in RPM
+    motor.set_speed_rpm(300)  # 300 omwentelingen per minuut
     
-    # Change speed relative to current
-    motor.change_speed(+10)  # Speed up by 10%
-    motor.change_speed(-20)  # Slow down by 20%
+    # Snelheid relatief aanpassen
+    motor.change_speed(+10)  # 10% sneller
+    motor.change_speed(-20)  # 20% trager
     
-    # Get current speed
+    # Huidige snelheid ophalen
     current_speed = motor.get_speed_percent()
-    print(f"Current speed: {current_speed}%")
+    print(f"Huidige snelheid: {current_speed}%")
 ```
 
-### Relative Motion (No Position Tracking)
+### Relatieve beweging (zonder positietracking)
 
 ```python
 with StepperController(address=0) as motor:
-    # Move by exact number of steps
+    # Verplaatsen met een exact aantal stappen
     motor.move_steps(steps=100, speed_percent=50.0, clockwise=True)
     
-    # Move by degrees (relative rotation)
+    # Verplaatsen in graden (relatieve rotatie)
     motor.move_degrees(degrees=45.0, speed_percent=50.0, clockwise=True)
     
-    # Rotate by full revolutions
+    # Draaien met volledige omwentelingen
     motor.rotate(revs=2.5, speed_percent=50.0, clockwise=False)
     
-    # Run continuously until stopped
+    # Continu draaien tot het stoppen
     motor.run_continuous(speed_percent=60.0, clockwise=True)
 ```
 
-### Direction Control
+### Richting regelen
 
 ```python
 with StepperController(address=0) as motor:
-    # Clockwise rotation
+    # Met de klok mee draaien
     motor.set_direction(clockwise=True)
     motor.move_steps(100)
     
-    # Counter-clockwise rotation
+    # Tegen de klok in draaien
     motor.set_direction(clockwise=False)
     motor.move_steps(100)
 ```
 
-### Motion Monitoring
+### Beweging volgen
 
 ```python
 with StepperController(address=0) as motor:
-    # Check if motor is currently moving
+    # Controleren of de motor aan het bewegen is
     if motor.is_moving():
-        print("Motor is moving")
+        print("Motor beweegt")
     else:
-        print("Motor is idle")
+        print("Motor staat stil")
     
-    # Wait for motion to complete (with timeout)
+    # Wachten tot de beweging klaar is (met timeout)
     try:
         motor.move_steps(500, speed_percent=50)
         motor.wait_until_complete(timeout_sec=10.0)
-        print("Motion completed successfully")
+        print("Beweging succesvol afgerond")
     except TimeoutError:
-        print("Motion did not complete within timeout")
+        print("Beweging werd niet binnen de timeout afgerond")
 ```
 
-### Reading Controller State
+### Status van de controller lezen
 
 ```python
 with StepperController(address=0) as motor:
     state = motor.get_state()
-    print(f"Enabled: {state['enabled']}")
-    print(f"Direction: {'CW' if state['clockwise'] else 'CCW'}")
-    print(f"Speed: {state['speed_percent']}%")
-    print(f"Pulse Count: {state['pulse_count']}")
-    print(f"Continuous Mode: {state['is_continuous']}")
-    print(f"Period (µs): {state['period_us']}")
+    print(f"Ingeschakeld: {state['enabled']}")
+    print(f"Richting: {'CW' if state['clockwise'] else 'CCW'}")
+    print(f"Snelheid: {state['speed_percent']}%")
+    print(f"Pulstelling: {state['pulse_count']}")
+    print(f"Continu-modus: {state['is_continuous']}")
+    print(f"Periode (µs): {state['period_us']}")
 ```
 
 ---
 
-## API Reference
+## API-referentie
 
-### Initialization
+### Initialisatie
 
 #### `__init__(address: int | str, bus: int = 1, steps_per_rev: int = 200, i2c_retry_count: int = 3, i2c_retry_delay: float = 0.05, i2c_retry_backoff: float = 2.0, invert: bool = False)`
 
-Create a new stepper controller instance.
+Maak een nieuwe StepperController-instantie aan.
 
 **Parameters:**
-- `address` (int or str): Low 4-bit I2C address offset (0-15 or "0000"-"1111" binary). Final I2C address = base (0x20) (module address) + offset
-- `bus` (int, optional): I2C bus number. Default: 1
-- `steps_per_rev` (int, optional): Motor steps per full revolution. (can be set by flipping switches on driver module) Default: 200
-- `i2c_retry_count` (int, optional): Number of retry attempts for transient I2C errors. Default: 3
-- `i2c_retry_delay` (float, optional): Initial delay in seconds before retrying. Default: 0.05
-- `i2c_retry_backoff` (float, optional): Multiplier for exponential backoff between retries. Default: 2.0
-- `invert` (bool, optional): If True, inverts all direction commands. Useful when motor is physically oriented differently (clockwise becomes counter-clockwise). Default: False
+- `address` (int of str): Lage 4-bit I2C-adresoffset (0-15 of "0000"-"1111" binair). Eindadres I2C = basis (0x20) + offset
+- `bus` (int, optioneel): Nummer van de I2C-bus. Standaard: 1
+- `steps_per_rev` (int, optioneel): Aantal motostappen per volledige omwenteling. (kan worden ingesteld met schakelaars op de driver-module) Standaard: 200
+- `i2c_retry_count` (int, optioneel): Aantal herpogingen bij tijdelijke I2C-fouten. Standaard: 3
+- `i2c_retry_delay` (float, optioneel): Eerste vertraging in seconden vóór opnieuw proberen. Standaard: 0.05
+- `i2c_retry_backoff` (float, optioneel): Vermenigvuldigingsfactor voor exponentiële vertraging tussen pogingen. Standaard: 2.0
+- `invert` (bool, optioneel): Als dit `True` is, worden alle richtingsopdrachten omgekeerd. Handig wanneer de motor fysiek anders is gemonteerd (met de klok mee wordt tegen de klok in). Standaard: `False`
 
-**Example:**
+**Voorbeeld:**
 ```python
 motor = StepperController(address=0, bus=1, steps_per_rev=200)
-motor = StepperController(address="0101", bus=1)  # Binary address
-motor = StepperController(address=0, invert=True)  # Motor runs in opposite direction
+motor = StepperController(address="0101", bus=1)  # Binair adres
+motor = StepperController(address=0, invert=True)  # Motor draait in omgekeerde richting
 ```
 
 ---
 
-### Motion Control
+### Bewegingsregeling
 
 #### `move_steps(steps: int, speed_percent: float = 50.0, clockwise: bool = True)`
 
-Execute a finite move by an exact number of steps.
+Voer een beperkte beweging uit met een exact aantal stappen.
 
 **Parameters:**
-- `steps` (int): Number of motor steps to execute
-- `speed_percent` (float): Speed as percentage (0-100). Default: 50%
-- `clockwise` (bool): True for clockwise, False for counter-clockwise. Default: True
+- `steps` (int): Aantal motorstappen dat moet worden uitgevoerd
+- `speed_percent` (float): Snelheid als percentage (0-100). Standaard: 50%
+- `clockwise` (bool): `True` voor met de klok mee, `False` voor tegen de klok in. Standaard: `True`
 
-**Raises:**
-- `ValueError`: If parameters are invalid
+**Fouten:**
+- `ValueError`: Als de parameters ongeldig zijn
 
-**Example:**
+**Voorbeeld:**
 ```python
 motor.move_steps(steps=400, speed_percent=75, clockwise=True)
 ```
@@ -210,58 +212,58 @@ motor.move_steps(steps=400, speed_percent=75, clockwise=True)
 
 #### `move_degrees(degrees: float, speed_percent: float = 50.0, clockwise: bool = True)`
 
-Execute a move by degrees of rotation.
+Voer een beweging uit in graden rotatie.
 
 **Parameters:**
-- `degrees` (float): Degrees to rotate
-- `speed_percent` (float): Speed as percentage (0-100). Default: 50%
-- `clockwise` (bool): Rotation direction. Default: True
+- `degrees` (float): Aantal graden dat moet worden gedraaid
+- `speed_percent` (float): Snelheid als percentage (0-100). Standaard: 50%
+- `clockwise` (bool): Rotatierichting. Standaard: `True`
 
-**Example:**
+**Voorbeeld:**
 ```python
-motor.move_degrees(degrees=180, speed_percent=50)  # Half rotation
+motor.move_degrees(degrees=180, speed_percent=50)  # Halve omwenteling
 ```
 
 ---
 
 #### `rotate(revs: float, speed_percent: float = 50.0, clockwise: bool = True)`
 
-Rotate by a number of full revolutions.
+Draai een aantal volledige omwentelingen.
 
 **Parameters:**
-- `revs` (float): Number of revolutions (can be fractional)
-- `speed_percent` (float): Speed as percentage (0-100). Default: 50%
-- `clockwise` (bool): Rotation direction. Default: True
+- `revs` (float): Aantal omwentelingen (mag ook een fractie zijn)
+- `speed_percent` (float): Snelheid als percentage (0-100). Standaard: 50%
+- `clockwise` (bool): Rotatierichting. Standaard: `True`
 
-**Example:**
+**Voorbeeld:**
 ```python
-motor.rotate(revs=2.5, speed_percent=60)  # 2.5 full rotations
+motor.rotate(revs=2.5, speed_percent=60)  # 2,5 volledige omwentelingen
 ```
 
 ---
 
 #### `run_continuous(speed_percent: float = 50.0, clockwise: bool = True)`
 
-Start continuous rotation until `stop()` is called.
+Start continu draaien totdat `stop()` wordt aangeroepen.
 
 **Parameters:**
-- `speed_percent` (float): Speed as percentage (0-100). Default: 50%
-- `clockwise` (bool): Rotation direction. Default: True
+- `speed_percent` (float): Snelheid als percentage (0-100). Standaard: 50%
+- `clockwise` (bool): Rotatierichting. Standaard: `True`
 
-**Example:**
+**Voorbeeld:**
 ```python
 motor.run_continuous(speed_percent=75, clockwise=True)
-# Motor runs indefinitely...
-motor.stop()  # Stop the motor
+# Motor draait nu oneindig door...
+motor.stop()  # Motor stoppen
 ```
 
 ---
 
 #### `start()`
 
-Start the motor with default settings (50% speed, clockwise, continuous).
+Start de motor met standaardinstellingen (50% snelheid, met de klok mee, continu).
 
-**Example:**
+**Voorbeeld:**
 ```python
 motor.start()
 motor.stop()
@@ -271,45 +273,45 @@ motor.stop()
 
 #### `stop()`
 
-Stop the motor immediately by disabling the driver output.
+Stop de motor onmiddellijk door de driver-uitgang uit te schakelen.
 
-**Example:**
+**Voorbeeld:**
 ```python
 motor.stop()
 ```
 
 ---
 
-### Speed Control
+### Snelheidsregeling
 
 #### `set_speed_percent(speed_percent: float)`
 
-Set motor speed as a percentage of maximum speed.
+Stel de motorsnelheid in als percentage van de maximale snelheid.
 
 **Parameters:**
-- `speed_percent` (float): Speed percentage (0-100)
-  - 0% = slowest (maximum step period = 65535 µs)
-  - 100% = fastest (minimum step period = 1000 µs)
+- `speed_percent` (float): Snelheidspercentage (0-100)
+  - 0% = traagst (maximale stapperiode = 65535 µs)
+  - 100% = snelst (minimale stapperiode = 1000 µs)
 
-**Example:**
+**Voorbeeld:**
 ```python
-motor.set_speed_percent(50)   # 50% speed
-motor.set_speed_percent(100)  # Maximum speed
+motor.set_speed_percent(50)   # 50% snelheid
+motor.set_speed_percent(100)  # Maximale snelheid
 ```
 
 ---
 
 #### `set_speed_rpm(rpm: float)`
 
-Set motor speed in revolutions per minute.
+Stel de motorsnelheid in in omwentelingen per minuut.
 
 **Parameters:**
-- `rpm` (float): Desired RPM (must be > 0)
+- `rpm` (float): Gewenste RPM (moet > 0 zijn)
 
-**Raises:**
-- `ValueError`: If RPM is ≤ 0
+**Fouten:**
+- `ValueError`: Als RPM ≤ 0 is
 
-**Example:**
+**Voorbeeld:**
 ```python
 motor.set_speed_rpm(300)  # 300 RPM
 ```
@@ -318,106 +320,106 @@ motor.set_speed_rpm(300)  # 300 RPM
 
 #### `change_speed(delta_percent: float)`
 
-Adjust speed by a relative percentage of current speed.
+Pas de snelheid aan met een relatief percentage van de huidige snelheid.
 
 **Parameters:**
-- `delta_percent` (float): Speed change (-100 to +100)
-  - Positive: speed up
-  - Negative: slow down
+- `delta_percent` (float): Snelheidsverandering (-100 tot +100)
+  - Positief: sneller
+  - Negatief: trager
 
-**Example:**
+**Voorbeeld:**
 ```python
-motor.change_speed(+20)   # Speed up by 20%
-motor.change_speed(-10)   # Slow down by 10%
+motor.change_speed(+20)   # 20% sneller
+motor.change_speed(-10)   # 10% trager
 ```
 
 ---
 
 #### `get_speed_percent() -> float`
 
-Get the current motor speed as a percentage.
+Geef de huidige motorsnelheid terug als percentage.
 
-**Returns:** Current speed percentage (0-100)
+**Retourwaarde:** Huidig snelheidspercentage (0-100)
 
-**Example:**
+**Voorbeeld:**
 ```python
 speed = motor.get_speed_percent()
-print(f"Current speed: {speed}%")
+print(f"Huidige snelheid: {speed}%")
 ```
 
 ---
 
-### Direction Control
+### Richtingsregeling
 
 #### `set_direction(clockwise: bool)`
 
-Set the motor rotation direction.
+Stel de rotatierichting van de motor in.
 
 **Parameters:**
-- `clockwise` (bool): True for clockwise, False for counter-clockwise. If `invert=True` was set during initialization, this direction will be automatically flipped.
+- `clockwise` (bool): `True` voor met de klok mee, `False` voor tegen de klok in. Als `invert=True` is ingesteld tijdens initialisatie, wordt deze richting automatisch omgedraaid.
 
-**Example:**
+**Voorbeeld:**
 ```python
-motor.set_direction(clockwise=True)   # Clockwise (or counter-clockwise if invert=True)
-motor.set_direction(clockwise=False)  # Counter-clockwise (or clockwise if invert=True)
+motor.set_direction(clockwise=True)   # Met de klok mee (of tegen de klok in als invert=True)
+motor.set_direction(clockwise=False)  # Tegen de klok in (of met de klok mee als invert=True)
 
-# With invert flag:
+# Met invert-vlag:
 motor_inverted = StepperController(address=0, invert=True)
-motor_inverted.set_direction(clockwise=True)  # Motor actually runs counter-clockwise
+motor_inverted.set_direction(clockwise=True)  # Motor draait feitelijk tegen de klok in
 ```
 
 ---
 
-### Low-Level Control
+### Lage-niveau bediening
 
 #### `enable(state: bool)`
 
-Enable or disable the stepper driver output.
+Schakel de stepperdriver-uitgang in of uit.
 
 **Parameters:**
-- `state` (bool): True to enable, False to disable
+- `state` (bool): `True` om in te schakelen, `False` om uit te schakelen
 
-**Example:**
+**Voorbeeld:**
 ```python
-motor.enable(True)   # Enable driver
-motor.enable(False)  # Disable driver
+motor.enable(True)   # Driver inschakelen
+motor.enable(False)  # Driver uitschakelen
 ```
 
 ---
 
-### State Monitoring
+### Statusbewaking
 
 #### `get_state() -> dict`
 
-Read the complete state from the slave device.
+Lees de volledige toestand uit van het slave-apparaat.
 
-**Returns:** Dictionary with keys:
-- `enabled` (bool): Driver is enabled
-- `clockwise` (bool): Rotation direction
-- `period_us` (int): Step period in microseconds
-- `speed_percent` (float): Speed as percentage
-- `pulse_count` (int): Configured pulse count
-- `is_continuous` (bool): Whether in continuous mode
+**Retourwaarde:** Woordenboek met sleutels:
+- `enabled` (bool): Driver is ingeschakeld
+- `clockwise` (bool): Rotatierichting
+- `period_us` (int): Stapperiode in microseconden
+- `speed_percent` (float): Snelheid als percentage
+- `pulse_count` (int): Ingestelde pulstelling
+- `is_continuous` (bool): Of de motor in continu-modus staat
 
-**Example:**
+**Voorbeeld:**
 ```python
 state = motor.get_state()
 if state['is_continuous']:
-    print("Running in continuous mode")
+    print("Draait in continu-modus")
 ```
 
 ---
 
 #### `is_moving() -> bool`
 
-Check if the motor is currently executing motion.
+Controleer of de motor momenteel een beweging uitvoert.
 
-**Returns:** True if enabled and motion is not complete, False otherwise
+**Retourwaarde:** `True` als de motor ingeschakeld is en de beweging nog niet klaar is, anders `False`
 
-**Example:**
+**Voorbeeld:**
 ```python
 while motor.is_moving():
-    print("Still moving...")
+    print("Nog steeds aan het bewegen...")
     time.sleep(0.1)
 ```
 
@@ -425,131 +427,130 @@ while motor.is_moving():
 
 #### `wait_until_complete(timeout_sec: float = 30.0) -> bool`
 
-Block execution until the current motion completes or timeout is reached.
+Blokkeer de uitvoering totdat de huidige beweging klaar is of totdat de timeout is bereikt.
 
 **Parameters:**
-- `timeout_sec` (float): Maximum seconds to wait. Default: 30
+- `timeout_sec` (float): Maximum aantal seconden om te wachten. Standaard: 30
 
-**Returns:** True if motion completed before timeout
+**Retourwaarde:** `True` als de beweging binnen de timeout klaar is
 
-**Raises:**
-- `TimeoutError`: If motion did not complete within timeout
+**Fouten:**
+- `TimeoutError`: Als de beweging niet binnen de timeout klaar is
 
-**Example:**
+**Voorbeeld:**
 ```python
 motor.move_steps(500)
 try:
     motor.wait_until_complete(timeout_sec=10)
-    print("Motion completed!")
+    print("Beweging voltooid!")
 except TimeoutError:
-    print("Motion timeout!")
+    print("Timeout bij beweging!")
 ```
 
 ---
 
-### Resource Management
+### Bronbeheer
 
 #### `close()`
 
-Close the I2C bus connection and release resources.
+Sluit de I2C-busverbinding en geef de bronnen vrij.
 
-**Example:**
+**Voorbeeld:**
 ```python
-motor.close()  # Always call when done
+motor.close()  # Altijd aanroepen wanneer je klaar bent
 ```
 
 ---
 
-#### Context Manager: `__enter__()` and `__exit__()`
+#### Contextmanager: `__enter__()` en `__exit__()`
 
-Use as a context manager for automatic resource cleanup.
+Gebruik de controller als contextmanager voor automatisch bronbeheer.
 
-**Example:**
+**Voorbeeld:**
 ```python
 with StepperController(address=0) as motor:
     motor.move_steps(100)
-    # Connection automatically closed here
+    # Verbinding wordt hier automatisch gesloten
 ```
 
 ---
 
-## Constants
+## Constanten
 
-Constants are defined in `stepper_i2c/constants.py`:
-You are not supposed to change these but you can if you really want to.
+De constanten zijn gedefinieerd in `stepper_i2c/constants.py`:
+Je hoeft deze normaal niet te wijzigen, maar het kan wel als je dat echt wilt.
 
 ```python
-BASE_I2C_ADDRESS = 0x20  # Base I2C address
-I2C_BUS = 1              # Default I2C bus number
-STEPS_PER_REV = 200      # Standard stepper motor steps per revolution
-MIN_PERIOD_US = 1000     # Minimum step period (fastest speed)
-MAX_PERIOD_US = 65535    # Maximum step period (slowest speed)
+BASE_I2C_ADDRESS = 0x20  # Basis-I2C-adres
+I2C_BUS = 1              # Standaard I2C-busnummer
+STEPS_PER_REV = 200      # Standaard aantal stappen per omwenteling
+MIN_PERIOD_US = 1000     # Minimale stapperiode (snelste snelheid)
+MAX_PERIOD_US = 65535    # Maximale stapperiode (traagste snelheid)
 ```
 
 ---
 
-## Important Notes
+## Belangrijke opmerkingen
 
-### No Position Tracking
+### Geen positietracking
 
-This controller **does not track absolute position**. It only supports **relative motion**:
-- ✅ Move 100 steps forward
-- ✅ Rotate 45 degrees clockwise
-- ✅ Run continuously until stopped
-- ❌ Move to absolute angle 85°
-- ❌ Query current position
+Deze controller houdt **geen absolute positie** bij. Hij ondersteunt alleen **relatieve beweging**:
+- ✅ 100 stappen vooruit bewegen
+- ✅ 45 graden met de klok mee draaien
+- ✅ Continu draaien tot stoppen
+- ❌ Naar een absolute hoek van 85° gaan
+- ❌ De huidige positie opvragen
 
-All motion is **relative** to wherever the motor currently is.
+Alle beweging is dus **relatief** ten opzichte van waar de motor op dat moment staat.
 
-### Speed Mapping
+### Snelheidsmapping
 
-Speed percentage maps inversely to step period:
-- **0%** = slowest motion (period = 65535 µs)
-- **50%** = medium speed (period ≈ 33267 µs)
-- **100%** = fastest motion (period = 1000 µs)
+Het snelheidspercentage wordt omgekeerd gekoppeld aan de stapperiode:
+- **0%** = traagste beweging (periode = 65535 µs)
+- **50%** = middensnelheid (periode ≈ 33267 µs)
+- **100%** = snelste beweging (periode = 1000 µs)
 
-### Direction Inversion
+### Richtingsomkering
 
-If your motor is physically oriented differently and you want all commands to run in the opposite direction, use the `invert` parameter:
+Als jouw motor fysiek anders gemonteerd is en je wilt dat alle opdrachten in de omgekeerde richting lopen, gebruik dan de parameter `invert`:
 
 ```python
-# Motor runs opposite to natural orientation
+# Motor draait tegenovergesteld aan de natuurlijke oriëntatie
 motor = StepperController(address=0, invert=True)
-
-motor.set_direction(clockwise=True)    # Motor actually runs counter-clockwise
-motor.move_degrees(90, clockwise=True) # Rotates -90 degrees instead of +90
+motor.set_direction(clockwise=True)    # Motor draait feitelijk tegen de klok in
+motor.move_degrees(90, clockwise=True) # Draait -90 graden in plaats van +90
 ```
 
-This inversion applies to **all direction-related commands**:
+Deze omkering geldt voor **alle richtingsgerelateerde opdrachten**:
 - `set_direction()`
 - `move_steps()`
 - `move_degrees()`
 - `rotate()`
 - `run_continuous()`
 
-### I2C Addressing
+### I2C-adressering
 
-The final I2C address is calculated as:
+Het eind-I2C-adres wordt als volgt berekend:
 ```
 Final Address = BASE_I2C_ADDRESS | (address & 0x0F)
 ```
 
-For example:
-- `StepperController(address=0)` connects to I2C address `0x20`
-- `StepperController(address="1000")` connects to I2C address `0x28` (0x20 | 0x08)
-- `StepperController(address=15)` connects to I2C address `0x2F` (0x20 | 0x0F)
+Bijvoorbeeld:
+- `StepperController(address=0)` maakt verbinding met I2C-adres `0x20`
+- `StepperController(address="1000")` maakt verbinding met I2C-adres `0x28` (0x20 | 0x08)
+- `StepperController(address=15)` maakt verbinding met I2C-adres `0x2F` (0x20 | 0x0F)
 
-### Motion Completion
+### Bewegingsvoltooiing
 
-For finite moves, monitor completion with:
+Voor beperkte bewegingen kun je de voltooiing volgen met:
 ```python
 motor.move_steps(500)
 while motor.is_moving():
     time.sleep(0.01)
-print("Move complete!")
+print("Beweging klaar!")
 ```
 
-Or use the blocking method:
+Of gebruik de blokkerende methode:
 ```python
 motor.move_steps(500)
 motor.wait_until_complete(timeout_sec=10)
@@ -557,21 +558,21 @@ motor.wait_until_complete(timeout_sec=10)
 
 ---
 
-## Troubleshooting
+## Problemen oplossen
 
-### Motor Not Responding
+### Motor reageert niet
 
-1. Check I2C bus communication: `i2cdetect -y 1`
-2. Verify correct bus number (usually 1)
-3. Verify correct address offset (DIP switches on Arduino)
-4. Check physical I2C connections (SDA/SCL)
+1. Controleer de I2C-buscommunicatie: `i2cdetect -y 1`
+2. Controleer of het juiste busnummer is gekozen (meestal 1)
+3. Controleer of de juiste adresoffset is ingesteld (DIP-schakelaars op de Arduino)
+4. Controleer de fysieke I2C-aansluitingen (SDA/SCL)
 
-### Motion Too Fast/Slow
+### Beweging te snel/te langzaam
 
-Adjust speed using `set_speed_percent()` or `set_speed_rpm()`. Note that very high speeds (>90%) or very low speeds (<10%) may be unreliable.
+Pas de snelheid aan met `set_speed_percent()` of `set_speed_rpm()`. Let op dat zeer hoge snelheden (>90%) of zeer lage snelheden (<10%) onbetrouwbaar kunnen zijn.
 
-### Timeout Errors
+### Timeout-fouten
 
-If `wait_until_complete()` times out, increase the timeout value or check if the motor is mechanically stuck.
+Als `wait_until_complete()` een timeout geeft, vergroot dan de timeoutwaarde of controleer of de motor mechanisch vastzit.
 
 ---
