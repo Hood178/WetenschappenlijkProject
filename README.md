@@ -25,10 +25,10 @@ Een compleet regelsysteem voor een steppermotor, bestaande uit:
 │        - Hardwarematige PWM-pulsopwekking                   │
 │        - Adresconfiguratie via DIP-schakelaars              │
 └────┬────────────────────────────────────────┬───────────────┘
-     │ GPIO-pinnen                            │ I2C
-     ├─ Pin 7 (EN)  ────→ TB6600 ENABLE       ├─ SDA (pin 18)
-     ├─ Pin 8 (DIR) ────→ TB6600 DIRECTION    └─ SCL (pin 19)
-     └─ Pin 9 (PUL) ────→ TB6600 PULSE
+     │ GPIO Pinnen                              │ I2C
+     ├─ Pin 7 (EN)  ────→ TB6600 ENABLE -     ├─ SDA (pin 18)
+     ├─ Pin 8 (DIR) ────→ TB6600 DIRECTION -  └─ SCL (pin 19)
+     └─ Pin 9 (PUL) ────→ TB6600 PULSE -
              ↓
     ┌────────────────────┐
     │ TB6600-steppermotor│
@@ -58,29 +58,34 @@ Een compleet regelsysteem voor een steppermotor, bestaande uit:
 
 #### Bedrading
 
-| Signaal | Arduino-pin | TB6600-pin | Doel |
-|--------|-------------|-----------|---------|
-| **PUL** | 9 | STEP | Pulssignaal (stijgende flank = een stap) |
-| **DIR** | 8 | DIR | Richtingsregeling (HIGH=vooruit, LOW=achteruit) |
-| **EN** | 7 | ENABLE | Driver inschakelen (HIGH=ingeschakeld, LOW=uitgeschakeld) |
-| **SDA** | 18 | - | I2C-datalijn |
-| **SCL** | 19 | - | I2C-kloklijn |
-| **GND** | GND | GND | Gemeenschappelijke massa |
-| **5V** | 5V | Logic VCC | Arduino 5V-logicaspanning |
-| - | VMOT | VMOT | Motorspanning (aparte 12-24V) |
+![Fig1](./assets/Fig1.jpeg)
 
-I2C gebruikt twee gedeelde lijnen, SDA en SCL. Deze lijnen hebben pull-upweerstanden nodig zodat ze HIGH blijven wanneer geen enkel apparaat ze LOW trekt. Een pull-upweerstand is een kleine weerstand die het signaal in de juiste toestand houdt. Als jouw bord of module die niet al ingebouwd heeft, plaats dan externe pull-ups van ongeveer 2,2k-10k ohm op zowel SDA als SCL.
+| Signaal | Arduino Pin | TB6600 Pin  | Doel |
+|--------|-------------|------------|---------|
+| **PUL** | 9 | PUL- | Pulssignaal (stijgende flank = 1 stap) |
+| **DIR** | 8 | DIR- | Richtingsregeling (HIGH=vooruit, LOW=achteruit) |
+| **EN** | 7 | EN- | Driver inschakelen (HIGH=ingeschakeld, LOW=uitgeschakeld) |
+| **SDA** | 18 | / | I2C data lijn |
+| **SCL** | 19 | / | I2C klok lijn |
+| **GND** | GND | GND | Gemeenschappelijke massa |
+| **5V** | 5V | EN+, DIR+, PUL+ * | Arduino 5V uitgangspanning** |
+| **VIN** | VIN | VCC | Arduino ingang spanning (6-21V)*** |
+
+\* In dit scenario zijn de + pinnen van de EN-, DIR- en PUL-ingangen verbonden met de 5V en de - pinnen met de Arduino. Dit zorgt voor een configuratie waarbij de ingangen als actief hoog worden beschouwd. Indien je ze als actief laag wilt gebruiken, moeten de - pinnen met de grond verbonden worden en de + pinnen met de Arduino. <br>
+\*\* Andere spanningen zijn ook mogelijk, maar dan moet je extra weerstanden gebruiken. In de documentatie van de TB6600 stepper motor driver raden ze een stroom van 8–15 mA aan. <br>
+\*\*\* In dit scenario zijn de motor en de Arduino verbonden met dezelfde voedingsbron. Dit is niet noodzakelijk. Je kan aparte voedingsbronnen gebruiken voor de Arduino en de stappenmotor indien nodig. Zorg er wel voor dat de massas met elkaar verbonden zijn.
+
 
 #### I2C-adresconfiguratie (DIP-schakelaars)
 
 Het I2C-slaveadres van de Arduino wordt ingesteld met 4 DIP-schakelaars op Arduino-pinnen 2, 3, 4 en 5:
 
-| DIP | Pin | Binaire positie | Wanneer OFF | Wanneer ON |
-|-----|-----|-----------------|------------|-----------|
-| S0 | 5 | bit 0 | -> adresbit 0 | -> adresbit 0 |
-| S1 | 4 | bit 1 | -> adresbit 1 | -> adresbit 1 |
-| S2 | 3 | bit 2 | -> adresbit 2 | -> adresbit 2 |
-| S3 | 2 | bit 3 | -> adresbit 3 | -> adresbit 3 |
+| DIP | Pin | Binaire Positie |
+|-----|-----|-----------|
+| S0 | 5 | bit 0 |
+| S1 | 4 | bit 1 |
+| S2 | 3 | bit 2 |
+| S3 | 2 | bit 3 |
 
 **Eindadres I2C = 0x20 + (waarde van de DIP-nibble)**
 
@@ -95,8 +100,10 @@ Het I2C-slaveadres van de Arduino wordt ingesteld met 4 DIP-schakelaars op Ardui
 1. Installeer [Arduino IDE](https://www.arduino.cc/en/software)
 2. Open `Slave/StepperMotorController/StepperMotorController.ino`
 3. Kies bord: **Arduino Nano R4**
-4. Kies de poort
+4. Kies de poort*: `/dev/ttyUSB0` or `/dev/ttyACM0` (Linux) or `COM3` (Windows)
 5. Klik op **Upload**
+
+\* De poort kan varieren per apparaat.
 
 ---
 
@@ -243,6 +250,7 @@ i2cdetect -y 1
 ```
 stepper-motor/
 ├── README.md                              # Dit bestand
+├── assets                                 # Figuren voor de documentatie
 ├── Master/
 │   ├── CONTROLLER_DOCUMENTATION.md        # Volledige Python API-referentie
 │   ├── draw_robot.py                      # Voorbeeld voor tekenen met meerdere assen
