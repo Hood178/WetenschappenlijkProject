@@ -14,6 +14,31 @@ In simpele woorden: Python stuurt opdrachten naar de Arduino, de Arduino stuurt 
 - Controleren of de motor nog beweegt
 - Automatisch en veilig afsluiten wanneer je `with` gebruikt
 
+## Commando-overzicht
+
+Hieronder staat een snel overzicht van alle commando's in deze documentatie. Klik op de verwijzing voor de uitgebreide uitleg verderop in het bestand.
+
+| Commando | Korte omschrijving | Verwijzing |
+|----------|---------------------|------------|
+| `__init__()` | Controller aanmaken en configureren | [Initialisatie](#initialisatie) |
+| `move_steps()` | Exact aantal stappen bewegen | [Bewegingsregeling](#bewegingsregeling) |
+| `move_degrees()` | Bepaalde hoek draaien | [Bewegingsregeling](#bewegingsregeling) |
+| `rotate()` | Volledige omwentelingen draaien | [Bewegingsregeling](#bewegingsregeling) |
+| `run_continuous()` | Onbeperkt blijven draaien | [Bewegingsregeling](#bewegingsregeling) |
+| `start()` | Motor met standaardinstellingen starten | [Bewegingsregeling](#bewegingsregeling) |
+| `stop()` | Motor onmiddellijk stoppen | [Bewegingsregeling](#bewegingsregeling) |
+| `set_speed_percent()` | Snelheid in procenten instellen | [Snelheidsregeling](#snelheidsregeling) |
+| `set_speed_rpm()` | Snelheid in RPM instellen | [Snelheidsregeling](#snelheidsregeling) |
+| `change_speed()` | Huidige snelheid relatief aanpassen | [Snelheidsregeling](#snelheidsregeling) |
+| `get_speed_percent()` | Huidige snelheid uitlezen | [Snelheidsregeling](#snelheidsregeling) |
+| `set_direction()` | Draairichting instellen | [Richtingsregeling](#richtingsregeling) |
+| `enable()` | Driver in- of uitschakelen | [Lage-niveau bediening](#lage-niveau-bediening) |
+| `get_state()` | Volledige status uitlezen | [Statusbewaking](#statusbewaking) |
+| `is_moving()` | Controleren of de motor beweegt | [Statusbewaking](#statusbewaking) |
+| `wait_until_complete()` | Wachten tot de beweging klaar is | [Statusbewaking](#statusbewaking) |
+| `close()` | I2C-verbinding sluiten | [Bronbeheer](#bronbeheer) |
+| `__enter__()` / `__exit__()` | Automatisch bronbeheer via `with` | [Bronbeheer](#bronbeheer) |
+
 ---
 
 ## Architectuur
